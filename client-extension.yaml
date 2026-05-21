@@ -1,0 +1,16 @@
+assemble:
+    - from: build/static
+      into: static
+
+aiChatbotFullpage:
+    friendlyURLMapping: ai-chatbot-fullpage
+    htmlElementName: ai-chatbot-fullpage
+    instanceable: false
+    name: Pathfinder AI
+    panelAppOrder: 500
+    panelCategoryKey: applications_menu.applications.custom.apps
+    portletCategoryName: category.client-extensions
+    type: customElement
+    urls:
+        - index.*.js
+    useESM: true
