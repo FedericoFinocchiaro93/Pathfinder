@@ -1,8 +1,8 @@
 # 🧭 Pathfinder AI
 
-**The intelligent assistant for Liferay DXP — conversational, contextual, multimodal.**
+**The intelligent chat-based assistant for Liferay DXP — conversational, contextual, multimodal.**
 
-Pathfinder AI turns your Liferay portal into a conversational powerhouse. Ask, create, search, modify — all through natural language. No forms, no panels, no friction. Just talk.
+Pathfinder AI turns your Liferay portal into a conversational powerhouse. Everything happens through a natural chat interface: ask questions, create content, search documents, modify pages, manage users — just type what you need. No forms, no admin panels, no friction. It's like having a Liferay expert available 24/7 in a chat window.
 
 ---
 
@@ -124,7 +124,7 @@ Pathfinder AI can execute **30+ operations** on your Liferay portal through Head
 ## 🚀 Installation
 
 ### Prerequisites
-- Liferay DXP 2025.Q4.11+ (or Liferay Portal 7.4 U112+ / DXP 7.4 GA112+)
+- Liferay DXP 2025.Q4.11+
 - Node.js 18+ for building
 
 ### Build
