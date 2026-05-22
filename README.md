@@ -2,44 +2,79 @@
 
 **The intelligent chat-based assistant for Liferay DXP — conversational, contextual, multimodal.**
 
-Pathfinder AI turns your Liferay portal into a conversational powerhouse. Everything happens through a natural chat interface: ask questions, create content, search documents, modify pages, manage users — just type what you need. No forms, no admin panels, no friction. It's like having a Liferay expert available 24/7 in a chat window.
+Pathfinder AI turns your Liferay portal into a conversational powerhouse. Everything happens through a natural chat interface: create content, manage users, build pages, modify taxonomies, handle objects — just type what you need. No forms, no admin panels, no friction. It's like having a Liferay expert available 24/7 in a chat window.
 
 ---
 
 ## ✨ What It Can Do
 
-### 🔍 Search & Discover — Instantly
-- **Find anything** across your entire portal: web content, documents, blog posts, pages — all indexed and searchable in natural language
-- **Advanced filtering** by content structure, taxonomy category, vocabulary, tags — zero friction
-- **Browse taxonomies** like you're having a conversation: *"Show me all categories under Organization"*, *"What vocabularies exist?"*
-- **Deep content inspection** — retrieve full structured content by ID, explore DDM structure fields and their data types, understand relationships between content, categories, and vocabularies
+### ✏️ Create, Modify & Delete — Just by Talking
+This is where Pathfinder AI truly shines. Every CRUD operation across your Liferay portal is available through a single chat message.
+
+#### 📄 Structured Content
+- **Create structured web content** with the right DDM fields, data types, and values — Pathfinder knows your content structures inside out
+- **Update existing content** by describing the change; no form-hunting required
+- **Delete content** safely, with confirmation built into the conversation flow
+- **Multi-language support** — create and update content with localized titles, descriptions, and friendly URLs in multiple languages
+
+#### 🗂️ Pages
+- **Create pages** — content pages, widget pages, child pages, with master page templates — all from a single message
+- **Search and browse pages** across your portal hierarchy
+
+#### 👥 Users, Organizations & Groups
+- **Full user management** — create, update, deactivate, and delete users
+- **Manage organizations** — create, update, and delete organizational structures
+- **Manage user groups** — full CRUD through Liferay Headless APIs
+- **Assign and remove roles** — regular roles, site roles, organization roles — Pathfinder picks the right parameters automatically
+
+#### 🏗️ Sites & Spaces (CMS)
+- **Create and manage sites** — full create/update/delete operations
+- **Manage Liferay Spaces (Asset Libraries)** — create, update, and delete Spaces; connect/disconnect them to sites; assign and remove users with specific roles
+- **Manage Space-scoped Objects and content** directly from the chat
+
+#### 🔖 Taxonomies
+- **Create vocabularies and categories** — build your entire taxonomy from a conversation
+- **Update and reorganize** existing categories and tags
+- **Delete taxonomies** cleanly, understanding relationships to existing content
+
+#### 🧩 Custom Object Definitions
+- **Create Object Definitions on the fly** — just describe what you need: field names, types (text, integer, decimal, boolean, date, relationship), scope (company, site, or Space)
+- **Manage Object entries** — full CRUD on all Object instances, regardless of scope
+- Pathfinder uses a dedicated `objectFieldBuilder` to handle complex field type combinations automatically
+
+---
+
+### 🔍 Search & Discover — When You Need It
+- **Find anything** across your entire portal: web content, documents, blog posts, pages — all in natural language
+- **Advanced filtering** by content structure, taxonomy category, vocabulary, and tags
+- **Browse taxonomies** conversationally: *"Show me all categories under Organization"*, *"What vocabularies exist?"*
+- **Deep content inspection** — retrieve full structured content by ID, explore DDM structure fields and their data types
 - **Full-text search** powered by Liferay's Search API with filters, sorting, and pagination
 
-### ✏️ Create & Modify — By Talking
-- **Create structured content** with the right fields, the right types, the right values — Pathfinder knows your DDM structures inside out
-- **Build pages** — content pages, widget pages, child pages, with master page templates — all from a chat message
-- **Manage Liferay Spaces (CMS)** — list, create, update, and delete Spaces (Asset Libraries); connect Spaces to sites; assign and remove users from Spaces; manage Space-scoped Objects and content
-- **Manage taxonomies** — create categories, vocabularies, tags; update them; organize your content architecture without touching the admin panel
-- **Create custom Object Definitions** with fields of any type (text, integer, decimal, boolean, date, relationship) — just describe what you need; supports company-scoped, site-scoped, and Space-scoped (depot) Objects
-- **Assign and remove roles** — regular roles, site roles, organization roles — Pathfinder knows which type requires which parameters
-- **Manage users, sites, organizations, user groups** — full CRUD operations through Liferay Headless APIs
-- **Multi-language content** — create and update content with localized titles, descriptions, and friendly URLs in multiple languages
+---
 
 ### 🧠 Understands Your Portal — Deeply
 - **Knows your DDM structures** — field names, data types, required fields, validation rules. No guessing, no mistakes
-- **Understands relationships** between content, categories, vocabularies, and pages — it navigates your content model like a human expert
-- **Bilingual by default** — responds in Italian and English, adapting to the user's language automatically
-- **Context-aware** — remembers the conversation, references previous results, chains operations logically
+- **Understands relationships** between content, categories, vocabularies, and pages — navigates your content model like a human expert
+- **Context-aware** — remembers the conversation, references previous results, chains operations logically (e.g. create a category, then immediately create content using it)
 - **Smart tool selection** — automatically picks the right Liferay API for the job, with the right parameters, every time
+- **Bilingual by default** — responds in Italian and English, adapting to the user's language automatically
 
 ### 🛡️ Privacy & Security — Built In
 - **Mandatory privacy consent screen** on first access — no chat until the user accepts
 - **Full EULA** always accessible from the settings panel
 - **Liferay credentials stay in the browser** — never transmitted to third parties
-- **22 internal rules** that prevent the LLM from exposing technical details, workarounds, or sensitive information
+- **10 behavioral rule blocks** injected at runtime into the system prompt — covering communication, data integrity, multi-step flows, entity handling, and known API limitations
 - **No telemetry** — zero data sent to external servers
 
 ---
+
+## 🚧 Beta & Continuous Improvement
+
+Some features of Pathfinder AI are currently in beta and are continuously evolving.  
+We are actively improving stability, tool orchestration, multilingual understanding, and compatibility across different LLM providers and Liferay APIs.
+
+Feedback and contributions are welcome to help shape future releases.
 
 ## 🤖 Supported LLM Providers
 
@@ -104,20 +139,20 @@ Switch providers at any time from the settings ⚙ — the conversation continue
 
 Pathfinder AI can execute **30+ operations** on your Liferay portal through Headless APIs:
 
-| Category | Tools |
-|----------|-------|
-| **Content** | Search content, get by ID, search by structure, list DDM structures, get structure fields |
-| **Documents** | Search documents in the repository |
-| **Blog** | Search blog posts |
-| **Pages** | Search pages, create pages, list master pages |
-| **Taxonomies** | Categories, vocabularies, tags — create, update, search |
-| **Users** | Current user, search users, assign/remove roles |
-| **Sites** | Site details, create/update/delete sites |
-| **Organizations** | Create, update, delete organizations |
-| **User Groups** | Create, update, delete user groups |
-| **Objects** | Create custom Object Definitions with typed fields; CRUD on Object entries (company, site, and Space-scoped) |
-| **Spaces (CMS)** | List, create, update, delete Spaces; connect/disconnect Spaces to sites; assign/remove users from Spaces |
-| **Advanced Search** | Search API with filters, sorting, pagination |
+| Category | CRUD Operations | Search / Read |
+|----------|----------------|---------------|
+| **Content** | Create, update, delete structured content | Search by keyword, structure, or ID; explore DDM fields |
+| **Documents** | Upload, update, delete documents | Search in any repository |
+| **Blog** | Create, update, delete blog posts | Search blog entries |
+| **Pages** | Create content pages, widget pages, child pages | Search pages; list master page templates |
+| **Taxonomies** | Create/update/delete categories, vocabularies, tags | Browse by vocabulary or category |
+| **Users** | Create, update, deactivate, delete users; assign/remove roles | Search users; get current user |
+| **Sites** | Create, update, delete sites | Get site details |
+| **Organizations** | Create, update, delete organizations | — |
+| **User Groups** | Create, update, delete user groups | — |
+| **Objects** | Create Object Definitions with typed fields; full CRUD on entries (company, site, Space-scoped) | — |
+| **Spaces (CMS)** | Create, update, delete Spaces; connect/disconnect to sites; assign/remove users | List all Spaces |
+| **Advanced Search** | — | Filters, sorting, pagination via Search API |
 
 ---
 
@@ -193,7 +228,7 @@ Updated pricing for all providers: Anthropic, Gemini, OpenAI, DeepSeek, Mistral.
 - **Local credentials** — Liferay email and password stay in the browser, transmitted only to the portal
 - **Local API keys** — LLM provider keys are stored in localStorage
 - **No telemetry** — zero data sent to third-party servers
-- **LLM rules** — 22 internal rules preventing the AI from exposing technical details, workarounds, or sensitive information
+- **LLM rules** — 10 behavioral rule blocks injected at runtime, preventing the AI from exposing technical details, inventing data, or bypassing operational constraints
 
 ---
 
