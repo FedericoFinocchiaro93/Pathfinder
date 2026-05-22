@@ -24,9 +24,11 @@ export function buildSystemPrompt(cfg) {
 
 const TOOL_RULES = (siteId, t) => {
     const p = t.prompt;
-    // Replace ${siteId} placeholder in rules
-    const rules = [p.rule1, p.rule2, p.rule3, p.rule4, p.rule5, p.rule6, p.rule7, p.rule8, p.rule9, p.rule10, p.rule11, p.rule12, p.rule13, p.rule14, p.rule15, p.rule16, p.rule17, p.rule18, p.rule19, p.rule20, p.rule21, p.rule22]
-        .map(r => r.replace(/\$\{siteId\}/g, siteId));
+    // Collect all rule* keys dynamically — works regardless of how many rules exist
+    const rules = Object.keys(p)
+        .filter(k => /^rule\d+$/.test(k))
+        .sort((a, b) => parseInt(a.slice(4)) - parseInt(b.slice(4)))
+        .map(k => p[k].replace(/\$\{siteId\}/g, siteId));
     return `FUNDAMENTAL TOOL RULES:\n${rules.join('\n\n')}`;
 };
 
