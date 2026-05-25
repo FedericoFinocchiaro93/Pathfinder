@@ -6,6 +6,7 @@ import { useCallback, useRef } from 'react';
 import { dbg, makeAssistantResponse } from '../lib/utils.js';
 import { executeTool }                from '../lib/toolExecutor.js';
 import { getBaseUrl, getSiteId }      from '../lib/liferay.js';
+import { getDictionary, getLocale }   from '../lib/i18n.js';
 import {
     callLLM,
     appendUserMessage,
@@ -47,15 +48,24 @@ function formatItemsPage(items, totalCount, offset, base) {
 
 function buildSearchingMessage(userText) {
     const text = userText.trim();
+    const t = getDictionary(getLocale());
     const patterns = [
-        { re: /\bcerca[mi]*\s+(.+)/i, tmpl: (m) => `Sto cercando "${m[1].trim()}"…` },
-        { re: /\btrova[mi]*\s+(.+)/i, tmpl: (m) => `Sto cercando "${m[1].trim()}"…` },
-        { re: /\bdammi\s+(.+)/i,      tmpl: (m) => `Recupero "${m[1].trim()}"…` },
-        { re: /\bmostra[mi]*\s+(.+)/i,tmpl: (m) => `Recupero "${m[1].trim()}"…` },
+        // Italian patterns
+        { re: /\bcerca[mi]*\s+(.+)/i, tmpl: (m) => t.searchingFor.replace('{query}', m[1].trim()) },
+        { re: /\btrova[mi]*\s+(.+)/i, tmpl: (m) => t.searchingFor.replace('{query}', m[1].trim()) },
+        { re: /\bdammi\s+(.+)/i,      tmpl: (m) => t.retrieving.replace('{query}', m[1].trim()) },
+        { re: /\bmostra[mi]*\s+(.+)/i,tmpl: (m) => t.retrieving.replace('{query}', m[1].trim()) },
+        // English patterns
+        { re: /\bsearch\s+(?:for\s+)?(.+)/i, tmpl: (m) => t.searchingFor.replace('{query}', m[1].trim()) },
+        { re: /\bfind\s+(.+)/i,                 tmpl: (m) => t.searchingFor.replace('{query}', m[1].trim()) },
+        { re: /\bshow\s+(?:me\s+)?(.+)/i,        tmpl: (m) => t.retrieving.replace('{query}', m[1].trim()) },
+        { re: /\bget\s+(.+)/i,                   tmpl: (m) => t.retrieving.replace('{query}', m[1].trim()) },
+        { re: /\blist\s+(.+)/i,                  tmpl: (m) => t.listing.replace('{query}', m[1].trim()) },
+        { re: /\bhow\s+many\s+(.+)/i,            tmpl: (m) => t.searchingFor.replace('{query}', m[1].trim()) },
     ];
     for (const { re, tmpl } of patterns) { const m = text.match(re); if (m) { let msg = tmpl(m); if (msg.length > 120) msg = msg.slice(0, 117) + '…'; return msg.charAt(0).toUpperCase() + msg.slice(1); } }
     const short = text.length > 80 ? text.slice(0, 77) + '…' : text;
-    return `Elaboro la tua richiesta: "${short}"…`;
+    return t.processingRequest.replace('{query}', short);
 }
 
 export function useAgent({ cfg, history, setHistory, setMessages, open, setUnread }) {

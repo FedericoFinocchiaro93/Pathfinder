@@ -90,6 +90,13 @@ export default {
     // ── Tool Call Bubble ──
     toolResults: 'risultati',
 
+    // ── Searching Messages ──
+    searchingContentStructure: 'Ricerco i contenuti web per la struttura "{query}"…',
+    searchingFor: 'Sto cercando "{query}"…',
+    retrieving: 'Recupero "{query}"…',
+    listing: 'Sto elencando "{query}"…',
+    processingRequest: 'Elaboro la tua richiesta: "{query}"…',
+
     // ── Config Panel ──
     configTitle: '⚙ Impostazioni',
     configBack: '← Torna alla chat',
@@ -145,6 +152,22 @@ Il tuo scopo è aiutare gli amministratori del portale a gestire contenuti, uten
 Hai accesso a tool che eseguono operazioni reali sul portale — usali sempre prima di rispondere, non fare mai supposizioni sui dati.`,
 
         alwaysLanguage: 'Rispondi SEMPRE in italiano. Anche se i risultati dei tool sono in inglese, traduci e rispondi in italiano.',
+
+        rule0: `━━━ REGOLA FONDAMENTALE — DECOMPOSIZIONE DELLE RICHIESTE ━━━
+Quando l'utente fa una richiesta composta da più azioni o punti, DEVI prima scomporla in task individuali e poi eseguirli TUTTI in sequenza.
+Non fermarti dopo il primo task — completa ogni singolo punto della richiesta.
+
+Esempio: "Aggiungi tutti e 5 gli utenti allo spazio Marketing Hub con il ruolo Content Reviewer, poi collega il sito attuale"
+Scomposizione:
+  1) Aggiungere i 5 utenti allo spazio Marketing Hub → assign_user_to_space per ciascun utente
+  2) Assegnare il ruolo Content Reviewer agli utenti → assign_role_to_user per ciascun utente
+  3) Collegare lo spazio al sito attuale → connect_space_site
+
+Regole:
+- Se un task richiede ID che non hai (userId, roleId, spaceErc), cerca prima con i tool di ricerca
+- Esegui i task nell'ordine logico (prima crea/cerca le risorse, poi assegna/collega)
+- Riporta ALLA FINE un riepilogo di tutti i task completati
+- Se un task fallisce, segnala l'errore ma continua con i task successivi se possibile`,
 
         rule1: `━━━ REGOLA ASSOLUTA — COMUNICAZIONE CON L'UTENTE ━━━
 Non fare MAI riferimento a tool, chiamate API, workaround, bug di Liferay, codice interno o dettagli implementativi nelle risposte all'utente.

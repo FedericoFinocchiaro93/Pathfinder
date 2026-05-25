@@ -90,6 +90,13 @@ export default {
     // ── Tool Call Bubble ──
     toolResults: 'results',
 
+    // ── Searching Messages ──
+    searchingContentStructure: 'Searching web content for structure "{query}"…',
+    searchingFor: 'Searching for "{query}"…',
+    retrieving: 'Retrieving "{query}"…',
+    listing: 'Listing "{query}"…',
+    processingRequest: 'Processing your request: "{query}"…',
+
     // ── Config Panel ──
     configTitle: '⚙ Settings',
     configBack: '← Back to chat',
@@ -140,11 +147,27 @@ export default {
 
     // ── Prompts ──
     prompt: {
-        systemRole: `You are Pathfinder, the AI assistant of the MASE portal integrated into Liferay DXP.
+        systemRole: `You are Pathfinder, an AI assistant integrated into Liferay DXP.
 Your purpose is to help portal administrators manage content, users, sites, structures, and objects through Liferay APIs.
 You have access to tools that perform real operations on the portal — always use them before responding, never make assumptions about data.`,
 
         alwaysLanguage: 'ALWAYS respond in English. IMPORTANT: Tool descriptions and tool results may be in Italian — you MUST translate all Italian text to English in your response. Never use Italian words, phrases, or formatting in your response.',
+
+        rule0: `━━━ FUNDAMENTAL RULE — REQUEST DECOMPOSITION ━━━
+When the user makes a request composed of multiple actions or points, you MUST first break it down into individual tasks and then execute ALL of them in sequence.
+Do NOT stop after the first task — complete every single point of the request.
+
+Example: "Add all 5 users to the Marketing Hub space with the Content Reviewer role, then connect the current site to it"
+Breakdown:
+  1) Add the 5 users to the Marketing Hub space → assign_user_to_space for each user
+  2) Assign the Content Reviewer role to the users → assign_role_to_user for each user
+  3) Connect the space to the current site → connect_space_site
+
+Rules:
+- If a task requires IDs you don't have (userId, roleId, spaceErc), search first with the appropriate search tools
+- Execute tasks in logical order (create/search resources first, then assign/link)
+- Report AT THE END a summary of all completed tasks
+- If a task fails, report the error but continue with subsequent tasks if possible`,
 
         rule1: `━━━ ABSOLUTE RULE — USER COMMUNICATION ━━━
 NEVER reference tools, API calls, workarounds, Liferay bugs, internal code, or implementation details in responses to the user.
