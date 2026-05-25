@@ -87,6 +87,7 @@ function buildSearchingMessage(userText) {
         { re: /\bdammi\s+(.+)/i,                                tmpl: (m) => t.retrieving.replace('{query}', m[1].trim()) },
         { re: /\bmostra[mi]*\s+(.+)/i,                          tmpl: (m) => t.retrieving.replace('{query}', m[1].trim()) },
         { re: /\belenca\s+(.+)/i,                               tmpl: (m) => t.listing.replace('{query}', m[1].trim()) },
+        { re: /\bcrea\s+(?:una\s+)?cartella\s+(.+)/i,          tmpl: (m) => t.creatingContentFolder.replace('{query}', m[1].trim()) },
         // English patterns
         { re: /\bsearch\s+(?:for\s+)?(.+)/i,                    tmpl: (m) => t.searchingFor.replace('{query}', m[1].trim()) },
         { re: /\bfind\s+(.+)/i,                                  tmpl: (m) => t.searchingFor.replace('{query}', m[1].trim()) },
@@ -94,6 +95,7 @@ function buildSearchingMessage(userText) {
         { re: /\bget\s+(.+)/i,                                   tmpl: (m) => t.retrieving.replace('{query}', m[1].trim()) },
         { re: /\blist\s+(.+)/i,                                  tmpl: (m) => t.listing.replace('{query}', m[1].trim()) },
         { re: /\bhow\s+many\s+(.+)/i,                           tmpl: (m) => t.searchingFor.replace('{query}', m[1].trim()) },
+        { re: /\bcreate\s+(?:a\s+)?(?:content\s+)?folder\s+(.+)/i, tmpl: (m) => t.creatingContentFolder.replace('{query}', m[1].trim()) },
     ];
 
     for (const { re, tmpl } of patterns) {

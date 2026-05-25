@@ -96,6 +96,7 @@ export default {
     retrieving: 'Recupero "{query}"…',
     listing: 'Sto elencando "{query}"…',
     processingRequest: 'Elaboro la tua richiesta: "{query}"…',
+    creatingContentFolder: 'Creo la cartella contenuti "{query}"…',
 
     // ── Config Panel ──
     configTitle: '⚙ Impostazioni',
@@ -275,8 +276,13 @@ SC1. Crea struttura: create_content_structure({ name, fields })
   Per select/checkbox_multiple → options: array di {label, value}
   Per grid → grid_columns e grid_rows
 
-SC2. Crea articolo: create_structured_content({ title, content_structure_id, fields })
+SC2. Crea articolo: create_structured_content({ title, content_structure_id, fields, folder_id })
   NOTA: per un bug di Liferay i valori dei campi NON vengono salvati nel POST — il tool applica automaticamente il workaround POST+PATCH.
+  Usa folder_id per inserire l'articolo in una cartella (usa create_content_folder per creare cartelle).
+
+SC2a. Cartelle contenuti: create_content_folder({ name, description?, parent_folder_id? })
+  Crea una cartella per organizzare i Journal Articles. Usa parent_folder_id per creare sottocartelle.
+  Crea SEMPRE prima la cartella, poi crea gli articoli al suo interno usando folder_id.
 
 SC3. LIMITAZIONI STRUTTURE:
   - link_to_layout e journal_article NON supportano valori via API

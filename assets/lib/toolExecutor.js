@@ -70,7 +70,7 @@ const NO_SITE_TOOLS = new Set([
     'create_object_entry', 'update_object_entry', 'delete_object_entry',
     'get_object_fields', 'update_object_field', 'add_object_field', 'delete_object_field',
     'create_object', 'delete_object',
-    'create_content_structure', 'create_structured_content', 'update_structured_content',
+    'create_content_structure', 'create_content_folder', 'create_structured_content', 'update_structured_content',
     'get_content_structure_fields',
     'update_space', 'delete_space', 'create_space', 'connect_space_site', 'disconnect_space_site',
     'assign_user_to_space', 'remove_user_from_space',
@@ -784,6 +784,24 @@ export async function executeTool(name, input, cfg) {
         };
 
         // ── CREATE STRUCTURED CONTENT (Journal Article) ────────────────────────
+        if (name === 'create_content_folder') {
+            if (!input?.name) return { error: 'name obbligatorio per creare una cartella.' };
+            const folderBody = { name: input.name };
+            if (input.description) folderBody.description = input.description;
+            try {
+                let url;
+                if (input.parent_folder_id) {
+                    url = `/o/headless-delivery/v1.0/structured-content-folders/${input.parent_folder_id}/structured-content-folders`;
+                } else {
+                    url = `/o/headless-delivery/v1.0/sites/${siteId}/structured-content-folders`;
+                }
+                const result = await liferayPost(base, url, folderBody, user, pass);
+                return { id: result.id, name: result.name, description: result.description || '', parentFolderId: result.parentStructuredContentFolderId || 0, siteId: result.siteId, message: `Cartella "${result.name}" creata con successo (ID: ${result.id})` };
+            } catch (e) {
+                return { error: `Errore nella creazione della cartella: ${e.message}` };
+            }
+        }
+
         if (name === 'create_structured_content') {
             if (!input?.title) return { error: 'title obbligatorio per creare un contenuto strutturato.' };
             if (!input?.content_structure_id) return { error: 'content_structure_id obbligatorio. Usa get_content_structures per trovarlo.' };
@@ -863,6 +881,9 @@ export async function executeTool(name, input, cfg) {
                 };
                 if (Array.isArray(input.taxonomy_category_ids) && input.taxonomy_category_ids.length > 0) {
                     postBody.taxonomyCategoryIds = input.taxonomy_category_ids.map(Number);
+                }
+                if (input.folder_id) {
+                    postBody.structuredContentFolderId = input.folder_id;
                 }
 
                 const postResult = await liferayPost(base, `/o/headless-delivery/v1.0/sites/${siteId}/structured-contents`, postBody, user, pass);
