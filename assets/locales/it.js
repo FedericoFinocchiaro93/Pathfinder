@@ -97,6 +97,13 @@ export default {
     listing: 'Sto elencando "{query}"…',
     processingRequest: 'Elaboro la tua richiesta: "{query}"…',
     creatingContentFolder: 'Creo la cartella contenuti "{query}"…',
+    creatingObjectEntryFolder: 'Creo la cartella Object Entry "{query}"…',
+    deletingContentFolder: 'Elimino la cartella contenuti "{query}"…',
+    deletingObjectEntryFolder: 'Elimino la cartella Object Entry "{query}"…',
+    listingContentFolders: 'Sto elencando le cartelle contenuti…',
+    listingObjectEntryFolders: 'Sto elencando le cartelle Object Entry…',
+    updatingContentFolder: 'Aggiorno la cartella contenuti "{query}"…',
+    updatingObjectEntryFolder: 'Aggiorno la cartella Object Entry "{query}"…',
 
     // ── Config Panel ──
     configTitle: '⚙ Impostazioni',
@@ -280,9 +287,25 @@ SC2. Crea articolo: create_structured_content({ title, content_structure_id, fie
   NOTA: per un bug di Liferay i valori dei campi NON vengono salvati nel POST — il tool applica automaticamente il workaround POST+PATCH.
   Usa folder_id per inserire l'articolo in una cartella (usa create_content_folder per creare cartelle).
 
-SC2a. Cartelle contenuti: create_content_folder({ name, description?, parent_folder_id? })
+SC2c. Object Entry in cartella: create_object_entry({ object_name, fields, scope_key, object_entry_folder_id })
+  Usa object_entry_folder_id per inserire una voce di Object Entry in una cartella ESISTENTE dentro uno Space.
+  IMPORTANTE: NON creare un nuovo Space o una nuova cartella a meno che l'utente non lo chieda esplicitamente.
+  Se l'utente dice "crea un entry nella cartella X", prima trova l'ID della cartella (usa get_object_entries o chiedi all'utente), poi passalo come object_entry_folder_id.
+  Esempio: create_object_entry({ object_name: "EventObject", scope_key: "Sviluppatori", object_entry_folder_id: 58411, fields: { title: "Mio Evento" } })
+
+SC2a. Cartelle contenuti: list_content_folders({ parent_folder_id? }) / create_content_folder({ name, description?, parent_folder_id? }) / update_content_folder({ folder_id, name?, description? }) / delete_content_folder({ folder_id })
+  Usa list_content_folders per trovare gli ID delle cartelle prima di aggiornarle o eliminarle.
   Crea una cartella per organizzare i Journal Articles. Usa parent_folder_id per creare sottocartelle.
   Crea SEMPRE prima la cartella, poi crea gli articoli al suo interno usando folder_id.
+  Usa update_content_folder per rinominare o cambiare descrizione. Usa delete_content_folder per eliminare una cartella tramite il suo ID.
+
+SC2b. Cartelle Object Entry (negli Space): list_object_entry_folders({ scope_key? }) / create_object_entry_folder({ label, title?, description?, scope_key?, parent_object_entry_folder_id? }) / update_object_entry_folder({ folder_id, label?, title?, description? }) / delete_object_entry_folder({ folder_id })
+  Usa list_object_entry_folders per trovare gli ID delle cartelle prima di aggiornarle, eliminarle o inserirvi entry.
+  Crea una cartella per organizzare le voci di Object Entry dentro uno Space (Asset Library).
+  - scope_key: il nome dello Space (es. "Sviluppatori"). Se omesso, usa il primo Space disponibile.
+  - parent_object_entry_folder_id: se omesso, la cartella viene creata sotto la cartella radice "Contents" (ERC: L_CONTENTS) così è visibile nell'interfaccia CMS.
+  - Usa questo tool quando l'utente vuole organizzare Object Entry in uno Space, NON create_content_folder (che è per i Journal Articles nei siti).
+  - Usa update_object_entry_folder per rinominare o cambiare descrizione. Usa delete_object_entry_folder per eliminare una cartella tramite il suo ID.
 
 SC3. LIMITAZIONI STRUTTURE:
   - link_to_layout e journal_article NON supportano valori via API

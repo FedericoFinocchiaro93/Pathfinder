@@ -70,7 +70,7 @@ const NO_SITE_TOOLS = new Set([
     'create_object_entry', 'update_object_entry', 'delete_object_entry',
     'get_object_fields', 'update_object_field', 'add_object_field', 'delete_object_field',
     'create_object', 'delete_object',
-    'create_content_structure', 'create_content_folder', 'create_structured_content', 'update_structured_content',
+    'create_content_structure', 'create_content_folder', 'list_content_folders', 'delete_content_folder', 'update_content_folder', 'create_object_entry_folder', 'list_object_entry_folders', 'delete_object_entry_folder', 'update_object_entry_folder', 'create_structured_content', 'update_structured_content',
     'get_content_structure_fields',
     'update_space', 'delete_space', 'create_space', 'connect_space_site', 'disconnect_space_site',
     'assign_user_to_space', 'remove_user_from_space',
@@ -799,6 +799,197 @@ export async function executeTool(name, input, cfg) {
                 return { id: result.id, name: result.name, description: result.description || '', parentFolderId: result.parentStructuredContentFolderId || 0, siteId: result.siteId, message: `Cartella "${result.name}" creata con successo (ID: ${result.id})` };
             } catch (e) {
                 return { error: `Errore nella creazione della cartella: ${e.message}` };
+            }
+        }
+
+        // ── CREATE OBJECT ENTRY FOLDER (in Space/Asset Library) ──────────────
+        if (name === 'create_object_entry_folder') {
+            if (!input?.label) return { error: 'label obbligatorio per creare una cartella Object Entry.' };
+            const folderLabel = input.label;
+            const folderTitle = input.title || folderLabel;
+            const folderBody = { label: folderLabel, title: folderTitle };
+            if (input.description) folderBody.description = input.description;
+
+            try {
+                // Resolve scopeKey: use provided one, or find first available Space
+                let scopeKey = input.scope_key || null;
+                if (!scopeKey) {
+                    let assetLibraries = [];
+                    try {
+                        const libData = await liferayGet(base, '/o/headless-asset-library/v1.0/asset-libraries', user, pass);
+                        assetLibraries = libData.items || [];
+                    } catch (_) { /* ignore */ }
+                    if (assetLibraries.length > 0) {
+                        scopeKey = assetLibraries[0].name || assetLibraries[0].externalReferenceCode || String(assetLibraries[0].id);
+                    } else {
+                        return { error: 'Nessuno Space disponibile. Specifica scope_key o crea prima uno Space.' };
+                    }
+                }
+
+                // Resolve parentObjectEntryFolderId
+                let parentFolderId = input.parent_object_entry_folder_id || null;
+                if (!parentFolderId) {
+                    // Find the "Contents" root folder (ERC: L_CONTENTS) in the Space
+                    try {
+                        const foldersData = await liferayGet(base, `/o/headless-object/v1.0/scopes/${encodeURIComponent(scopeKey)}/object-entry-folders?flatten=true&pageSize=50`, user, pass);
+                        const contentsFolder = (foldersData.items || []).find(f => f.externalReferenceCode === 'L_CONTENTS');
+                        if (contentsFolder) {
+                            parentFolderId = contentsFolder.id;
+                        }
+                    } catch (e) {
+                        dbg('create_object_entry_folder: could not find L_CONTENTS folder:', e.message);
+                    }
+                }
+
+                if (parentFolderId) {
+                    folderBody.parentObjectEntryFolderId = parentFolderId;
+                }
+
+                const result = await liferayPost(base, `/o/headless-object/v1.0/scopes/${encodeURIComponent(scopeKey)}/object-entry-folders`, folderBody, user, pass);
+                return {
+                    id: result.id,
+                    label: result.label,
+                    title: result.title,
+                    description: result.description || '',
+                    parentObjectEntryFolderId: result.parentObjectEntryFolderId || 0,
+                    scopeKey: result.scopeKey || scopeKey,
+                    message: `Cartella Object Entry "${result.label}" creata con successo nello Space "${scopeKey}" (ID: ${result.id})`,
+                };
+            } catch (e) {
+                return { error: `Errore nella creazione della cartella Object Entry: ${e.message}` };
+            }
+        }
+
+        // ── LIST CONTENT FOLDERS ──────────────────────────────────────────────
+        if (name === 'list_content_folders') {
+            try {
+                const ps = input.page_size || 50;
+                let url;
+                if (input.parent_folder_id) {
+                    url = `/o/headless-delivery/v1.0/structured-content-folders/${input.parent_folder_id}/structured-content-folders?pageSize=${ps}`;
+                } else {
+                    url = `/o/headless-delivery/v1.0/sites/${siteId}/structured-content-folders?pageSize=${ps}`;
+                }
+                const data = await liferayGet(base, url, user, pass);
+                const folders = (data.items || []).map(f => ({
+                    id: f.id,
+                    name: f.name,
+                    description: f.description || '',
+                    parentFolderId: f.parentStructuredContentFolderId || 0,
+                }));
+                return { totalCount: data.totalCount || folders.length, folders };
+            } catch (e) {
+                return { error: `Errore nel listing delle cartelle contenuti: ${e.message}` };
+            }
+        }
+
+        // ── LIST OBJECT ENTRY FOLDERS ────────────────────────────────────────
+        if (name === 'list_object_entry_folders') {
+            try {
+                // Resolve scopeKey
+                let scopeKey = input.scope_key || null;
+                if (!scopeKey) {
+                    let assetLibraries = [];
+                    try {
+                        const libData = await liferayGet(base, '/o/headless-asset-library/v1.0/asset-libraries', user, pass);
+                        assetLibraries = libData.items || [];
+                    } catch (_) { /* ignore */ }
+                    if (assetLibraries.length > 0) {
+                        scopeKey = assetLibraries[0].name || assetLibraries[0].externalReferenceCode || String(assetLibraries[0].id);
+                    } else {
+                        return { error: 'Nessuno Space disponibile. Specifica scope_key.' };
+                    }
+                }
+
+                const ps = input.page_size || 50;
+                let url;
+                if (input.parent_folder_id) {
+                    url = `/o/headless-object/v1.0/object-entry-folders/${input.parent_folder_id}/object-entry-folders?pageSize=${ps}`;
+                } else {
+                    url = `/o/headless-object/v1.0/scopes/${encodeURIComponent(scopeKey)}/object-entry-folders?flatten=true&pageSize=${ps}`;
+                }
+                const data = await liferayGet(base, url, user, pass);
+                const folders = (data.items || []).map(f => ({
+                    id: f.id,
+                    label: f.label,
+                    title: f.title || '',
+                    description: f.description || '',
+                    externalReferenceCode: f.externalReferenceCode || '',
+                    parentObjectEntryFolderId: f.parentObjectEntryFolderId || 0,
+                }));
+                return { totalCount: data.totalCount || folders.length, folders, scopeKey };
+            } catch (e) {
+                return { error: `Errore nel listing delle cartelle Object Entry: ${e.message}` };
+            }
+        }
+
+        // ── DELETE CONTENT FOLDER ──────────────────────────────────────────────
+        if (name === 'delete_content_folder') {
+            if (!input?.folder_id) return { error: 'folder_id obbligatorio per eliminare una cartella.' };
+            try {
+                await liferayDelete(base, `/o/headless-delivery/v1.0/structured-content-folders/${input.folder_id}`, user, pass);
+                return { success: true, folderId: input.folder_id, message: `Cartella contenuti (ID: ${input.folder_id}) eliminata con successo.` };
+            } catch (e) {
+                return { error: `Errore nell'eliminazione della cartella contenuti: ${e.message}` };
+            }
+        }
+
+        // ── DELETE OBJECT ENTRY FOLDER ───────────────────────────────────────
+        if (name === 'delete_object_entry_folder') {
+            if (!input?.folder_id) return { error: 'folder_id obbligatorio per eliminare una cartella Object Entry.' };
+            try {
+                await liferayDelete(base, `/o/headless-object/v1.0/object-entry-folders/${input.folder_id}`, user, pass);
+                return { success: true, folderId: input.folder_id, message: `Cartella Object Entry (ID: ${input.folder_id}) eliminata con successo.` };
+            } catch (e) {
+                return { error: `Errore nell'eliminazione della cartella Object Entry: ${e.message}` };
+            }
+        }
+
+        // ── UPDATE CONTENT FOLDER ─────────────────────────────────────────────
+        if (name === 'update_content_folder') {
+            if (!input?.folder_id) return { error: 'folder_id obbligatorio per aggiornare una cartella.' };
+            const patchBody = {};
+            if (input.name) patchBody.name = input.name;
+            if (input.description !== undefined) patchBody.description = input.description;
+            if (Object.keys(patchBody).length === 0) return { error: 'Nessun campo da aggiornare. Fornisci name o description.' };
+            try {
+                const result = await liferayPatch(base, `/o/headless-delivery/v1.0/structured-content-folders/${input.folder_id}`, patchBody, user, pass);
+                return { id: result.id, name: result.name, description: result.description || '', message: `Cartella contenuti "${result.name}" aggiornata con successo (ID: ${result.id})` };
+            } catch (e) {
+                return { error: `Errore nell'aggiornamento della cartella contenuti: ${e.message}` };
+            }
+        }
+
+        // ── UPDATE OBJECT ENTRY FOLDER ───────────────────────────────────────
+        if (name === 'update_object_entry_folder') {
+            if (!input?.folder_id) return { error: 'folder_id obbligatorio per aggiornare una cartella Object Entry.' };
+            const patchBody = {};
+            // When label is changed, also update title and label_i18n for all languages
+            // so the CMS UI shows the correct name consistently
+            if (input.label) {
+                patchBody.label = input.label;
+                patchBody.title = input.title || input.label;
+                // Get available languages to update label_i18n
+                let allLangs = ['en_US', 'it_IT'];
+                try {
+                    const rawLangs = window.Liferay?.ThemeDisplay?.getAvailableLocales?.();
+                    if (Array.isArray(rawLangs) && rawLangs.length > 0) {
+                        allLangs = rawLangs.map((l) => l.replace(/-/g, '_'));
+                    }
+                } catch (_) { /* ignore */ }
+                const labelI18n = {};
+                allLangs.forEach((l) => { labelI18n[l] = input.label; });
+                patchBody.label_i18n = labelI18n;
+            } else if (input.title) {
+                patchBody.title = input.title;
+            }
+            if (input.description !== undefined) patchBody.description = input.description;
+            if (Object.keys(patchBody).length === 0) return { error: 'Nessun campo da aggiornare. Fornisci label, title o description.' };
+            try {
+                const result = await liferayPatch(base, `/o/headless-object/v1.0/object-entry-folders/${input.folder_id}`, patchBody, user, pass);
+                return { id: result.id, label: result.label, title: result.title, description: result.description || '', message: `Cartella Object Entry "${result.label}" aggiornata con successo (ID: ${result.id})` };
+            } catch (e) {
+                return { error: `Errore nell'aggiornamento della cartella Object Entry: ${e.message}` };
             }
         }
 
@@ -2156,6 +2347,9 @@ export async function executeTool(name, input, cfg) {
             const objName = input.object_name;
             const restPath = await resolveObjectRestPath(base, objName, user, pass);
             const body = { ...input.fields };
+            if (input.object_entry_folder_id) {
+                body.objectEntryFolderId = input.object_entry_folder_id;
+            }
             const scopeKey = input.scope_key || null;
 
             if (scopeKey) {

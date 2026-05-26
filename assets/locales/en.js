@@ -97,6 +97,13 @@ export default {
     listing: 'Listing "{query}"…',
     processingRequest: 'Processing your request: "{query}"…',
     creatingContentFolder: 'Creating content folder "{query}"…',
+    creatingObjectEntryFolder: 'Creating Object Entry folder "{query}"…',
+    deletingContentFolder: 'Deleting content folder "{query}"…',
+    deletingObjectEntryFolder: 'Deleting Object Entry folder "{query}"…',
+    listingContentFolders: 'Listing content folders…',
+    listingObjectEntryFolders: 'Listing Object Entry folders…',
+    updatingContentFolder: 'Updating content folder "{query}"…',
+    updatingObjectEntryFolder: 'Updating Object Entry folder "{query}"…',
 
     // ── Config Panel ──
     configTitle: '⚙ Settings',
@@ -280,9 +287,25 @@ SC2. Create article: create_structured_content({ title, content_structure_id, fi
   NOTE: Due to a Liferay bug, field values are NOT saved on POST — the tool automatically applies the POST+PATCH workaround.
   Use folder_id to place the article inside a content folder (use create_content_folder to create folders).
 
-SC2a. Content folders: create_content_folder({ name, description?, parent_folder_id? })
+SC2c. Object Entry in folder: create_object_entry({ object_name, fields, scope_key, object_entry_folder_id })
+  Use object_entry_folder_id to place an Object Entry inside an EXISTING folder in a Space.
+  IMPORTANT: Do NOT create a new Space or new folder unless the user explicitly asks for one.
+  If the user says "create an entry in folder X", first find the folder ID (use get_object_entries or ask the user), then pass it as object_entry_folder_id.
+  Example: create_object_entry({ object_name: "EventObject", scope_key: "Sviluppatori", object_entry_folder_id: 58411, fields: { title: "My Event" } })
+
+SC2a. Content folders: list_content_folders({ parent_folder_id? }) / create_content_folder({ name, description?, parent_folder_id? }) / update_content_folder({ folder_id, name?, description? }) / delete_content_folder({ folder_id })
+  Use list_content_folders to find folder IDs before updating or deleting.
   Creates a folder to organize Journal Articles. Use parent_folder_id to create sub-folders.
   Always create the folder FIRST, then create articles inside it using folder_id.
+  Use update_content_folder to rename or change description. Use delete_content_folder to delete a folder by its ID.
+
+SC2b. Object Entry folders (in Spaces): list_object_entry_folders({ scope_key? }) / create_object_entry_folder({ label, title?, description?, scope_key?, parent_object_entry_folder_id? }) / update_object_entry_folder({ folder_id, label?, title?, description? }) / delete_object_entry_folder({ folder_id })
+  Use list_object_entry_folders to find folder IDs before updating, deleting, or placing entries in folders.
+  Creates a folder to organize Object Entries inside a Space (Asset Library).
+  - scope_key: the Space name (e.g. "Sviluppatori"). If omitted, uses the first available Space.
+  - parent_object_entry_folder_id: if omitted, the folder is created under the "Contents" root folder (ERC: L_CONTENTS) so it's visible in the CMS UI.
+  - Use this tool when the user wants to organize Object Entries in a Space, NOT create_content_folder (which is for Journal Articles in sites).
+  - Use update_object_entry_folder to rename or change description. Use delete_object_entry_folder to delete a folder by its ID.
 
 SC3. STRUCTURE LIMITATIONS:
   - link_to_layout and journal_article do NOT support values via API

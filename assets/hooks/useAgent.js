@@ -56,6 +56,10 @@ function buildSearchingMessage(userText) {
         { re: /\bdammi\s+(.+)/i,      tmpl: (m) => t.retrieving.replace('{query}', m[1].trim()) },
         { re: /\bmostra[mi]*\s+(.+)/i,tmpl: (m) => t.retrieving.replace('{query}', m[1].trim()) },
         { re: /\bcrea\s+(?:una\s+)?cartella\s+(.+)/i, tmpl: (m) => t.creatingContentFolder.replace('{query}', m[1].trim()) },
+        { re: /\belimina\s+(?:la\s+)?cartella\s+(.+)/i, tmpl: (m) => t.deletingContentFolder.replace('{query}', m[1].trim()) },
+        { re: /\belenca\s+(?:le\s+)?cartelle\s+(?:dei\s+)?contenuti/i, tmpl: () => t.listingContentFolders },
+        { re: /\brinomina\s+(?:la\s+)?cartella\s+(.+)/i, tmpl: (m) => t.updatingContentFolder.replace('{query}', m[1].trim()) },
+        { re: /\bmodifica\s+(?:la\s+)?cartella\s+(.+)/i, tmpl: (m) => t.updatingContentFolder.replace('{query}', m[1].trim()) },
         // English patterns
         { re: /\bsearch\s+(?:for\s+)?(.+)/i, tmpl: (m) => t.searchingFor.replace('{query}', m[1].trim()) },
         { re: /\bfind\s+(.+)/i,                 tmpl: (m) => t.searchingFor.replace('{query}', m[1].trim()) },
@@ -64,6 +68,10 @@ function buildSearchingMessage(userText) {
         { re: /\blist\s+(.+)/i,                  tmpl: (m) => t.listing.replace('{query}', m[1].trim()) },
         { re: /\bhow\s+many\s+(.+)/i,            tmpl: (m) => t.searchingFor.replace('{query}', m[1].trim()) },
         { re: /\bcreate\s+(?:a\s+)?(?:content\s+)?folder\s+(.+)/i, tmpl: (m) => t.creatingContentFolder.replace('{query}', m[1].trim()) },
+        { re: /\bdelete\s+(?:the\s+)?(?:content\s+)?folder\s+(.+)/i, tmpl: (m) => t.deletingContentFolder.replace('{query}', m[1].trim()) },
+        { re: /\blist\s+(?:the\s+)?(?:content\s+)?folders/i, tmpl: () => t.listingContentFolders },
+        { re: /\brename\s+(?:the\s+)?(?:content\s+)?folder\s+(.+)/i, tmpl: (m) => t.updatingContentFolder.replace('{query}', m[1].trim()) },
+        { re: /\bupdate\s+(?:the\s+)?(?:content\s+)?folder\s+(.+)/i, tmpl: (m) => t.updatingContentFolder.replace('{query}', m[1].trim()) },
     ];
     for (const { re, tmpl } of patterns) { const m = text.match(re); if (m) { let msg = tmpl(m); if (msg.length > 120) msg = msg.slice(0, 117) + '…'; return msg.charAt(0).toUpperCase() + msg.slice(1); } }
     const short = text.length > 80 ? text.slice(0, 77) + '…' : text;
