@@ -23,7 +23,7 @@ import ConsentScreenFP, { hasConsented } from './ui/ConsentScreenFP.jsx';
 import EulaModalFP      from './ui/EulaModalFP.jsx';
 import DocumentPicker    from './ui/DocumentPicker.jsx';
 import { resetSession as resetUsageSession } from '../lib/llmUsageTracker.js';
-import botIcon           from '../img/Copilot_20260516_162708.png';
+import botIcon           from '../img/PathfinderLogo.png';
 
 // Chips are now dynamic based on locale — see t.chips inside the component
 

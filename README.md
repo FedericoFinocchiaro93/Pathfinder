@@ -32,7 +32,11 @@ This is where Pathfinder AI truly shines. Every CRUD operation across your Lifer
 - **Manage Liferay Spaces (Asset Libraries)** — create, update, and delete Spaces; connect/disconnect them to sites; assign and remove users with specific roles
 - **Manage Space-scoped Objects and content** directly from the chat
 
-#### 🔖 Taxonomies
+#### � Documents & Files
+- **Browse and select documents** from the Liferay Document Library directly in the chat
+- **Attach local files** via drag & drop or file picker — the AI uses them as context and uploads to DML only when requested
+
+#### �🔖 Taxonomies
 - **Create vocabularies and categories** — build your entire taxonomy from a conversation
 - **Update and reorganize** existing categories and tags
 - **Delete taxonomies** cleanly, understanding relationships to existing content
@@ -64,7 +68,7 @@ This is where Pathfinder AI truly shines. Every CRUD operation across your Lifer
 - **Mandatory privacy consent screen** on first access — no chat until the user accepts
 - **Full EULA** always accessible from the settings panel
 - **Liferay credentials stay in the browser** — never transmitted to third parties
-- **10 behavioral rule blocks** injected at runtime into the system prompt — covering communication, data integrity, multi-step flows, entity handling, and known API limitations
+- **11 behavioral rule blocks** injected at runtime into the system prompt — covering communication, data integrity, multi-step flows, entity handling, and known API limitations
 - **No telemetry** — zero data sent to external servers
 
 ---
@@ -117,6 +121,7 @@ Switch providers at any time from the settings ⚙ — the conversation continue
 | File | Role |
 |------|------|
 | `ChatbotFullpage.jsx` | Main layout — sidebar, header, messages, input |
+| `DocumentPicker.jsx` | Document Library browser and picker |
 | `useAgentFP.js` | React hook — conversation orchestration, tool loop |
 | `llm/router.js` | Dispatch to selected LLM provider |
 | `llm/anthropic.js` | Anthropic Claude integration (streaming, tool use) |
@@ -142,7 +147,7 @@ Pathfinder AI can execute **30+ operations** on your Liferay portal through Head
 | Category | CRUD Operations | Search / Read |
 |----------|----------------|---------------|
 | **Content** | Create, update, delete structured content | Search by keyword, structure, or ID; explore DDM fields |
-| **Documents** | Upload, update, delete documents | Search in any repository |
+| **Documents** | Upload, update, delete documents; attach and upload files via chat | Search and browse documents in the DML |
 | **Blog** | Create, update, delete blog posts | Search blog entries |
 | **Pages** | Create content pages, widget pages, child pages | Search pages; list master page templates |
 | **Taxonomies** | Create/update/delete categories, vocabularies, tags | Browse by vocabulary or category |
@@ -228,7 +233,7 @@ Updated pricing for all providers: Anthropic, Gemini, OpenAI, DeepSeek, Mistral.
 - **Local credentials** — Liferay email and password stay in the browser, transmitted only to the portal
 - **Local API keys** — LLM provider keys are stored in localStorage
 - **No telemetry** — zero data sent to third-party servers
-- **LLM rules** — 10 behavioral rule blocks injected at runtime, preventing the AI from exposing technical details, inventing data, or bypassing operational constraints
+- **LLM rules** — 11 behavioral rule blocks injected at runtime, preventing the AI from exposing technical details, inventing data, or bypassing operational constraints
 
 ---
 
@@ -246,6 +251,7 @@ ai-chatbot-fullpage/
 │   │   └── ui/
 │   │       ├── ConfigPanelFP.jsx
 │   │       ├── ConsentScreenFP.jsx
+│   │       ├── DocumentPicker.jsx
 │   │       ├── EulaModalFP.jsx
 │   │       ├── MessageBubbleFP.jsx
 │   │       ├── ToolCallBubbleFP.jsx

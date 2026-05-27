@@ -6,7 +6,7 @@
 
 import React from 'react';
 import ToolCallBubbleFP from './ToolCallBubbleFP.jsx';
-import botIcon from '../../img/Copilot_20260516_162708.png';
+import botIcon from '../../img/PathfinderLogo.png';
 import { getDictionary, getLocale } from '../../lib/i18n.js';
 
 function renderContent(text) {
