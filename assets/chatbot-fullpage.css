@@ -957,7 +957,7 @@ ai-chatbot-fullpage {
     gap: 10px;
     background: var(--afp-bg-textarea);
     border: 1.5px solid var(--afp-border);
-    border-radius: 14px;
+    border-radius: 22px;
     padding: 10px 12px 10px 16px;
     transition: border-color 0.2s, box-shadow 0.2s;
     max-width: 900px;
@@ -983,6 +983,86 @@ ai-chatbot-fullpage {
 }
 
 .afp-textarea::placeholder { color: #94a3b8; }
+
+/* ── Model selector pill ─────────────────────────────────────────────────── */
+.afp-model-pill-wrapper {
+    position: relative;
+    flex-shrink: 0;
+}
+.afp-model-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 0 12px;
+    height: 38px;
+    border-radius: 19px;
+    border: 1px solid #d1d5db;
+    background: transparent;
+    color: #555;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+    line-height: 1;
+    user-select: none;
+}
+.afp-model-pill:hover {
+    background: rgba(0,0,0,0.04);
+    border-color: #9ca3af;
+}
+.afp-model-pill-label {
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.afp-model-pill svg {
+    opacity: 0.4;
+    flex-shrink: 0;
+}
+
+.afp-model-menu {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    right: 0;
+    min-width: 160px;
+    max-height: 240px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 4px;
+    z-index: 50;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+.afp-model-menu--down {
+    bottom: auto;
+    top: calc(100% + 6px);
+}
+.afp-model-menu-item {
+    display: block;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: #333;
+    font-size: 12px;
+    font-weight: 400;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+}
+.afp-model-menu-item:hover {
+    background: #f3f4f6;
+    color: #111;
+}
+.afp-model-menu-item-active {
+    background: #f3f4f6;
+    color: #111;
+    font-weight: 600;
+}
 
 .afp-send-btn {
     width: 38px;

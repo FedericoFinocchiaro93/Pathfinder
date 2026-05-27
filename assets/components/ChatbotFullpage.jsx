@@ -12,7 +12,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
-import { loadCfg }       from '../lib/config.js';
+import { loadCfg, saveCfg } from '../lib/config.js';
 import { getLocale, setLocale, getDictionary, getSupportedLocales } from '../lib/i18n.js';
 import { useAgentFP }    from '../hooks/useAgentFP.js';
 import { useChatHistory} from '../hooks/useChatHistory.js';
@@ -22,10 +22,60 @@ import UsagePanelFP     from './ui/UsagePanelFP.jsx';
 import ConsentScreenFP, { hasConsented } from './ui/ConsentScreenFP.jsx';
 import EulaModalFP      from './ui/EulaModalFP.jsx';
 import DocumentPicker    from './ui/DocumentPicker.jsx';
+import { fetchOllamaModels } from '../lib/llm/ollama.js';
+import { fetchOpenAIModels } from '../lib/llm/openai.js';
 import { resetSession as resetUsageSession } from '../lib/llmUsageTracker.js';
 import botIcon           from '../img/PathfinderLogo.png';
 
 // Chips are now dynamic based on locale — see t.chips inside the component
+
+// ── Model lists per provider ───────────────────────────────────────────────────
+const PROVIDER_MODELS = {
+    anthropic: [
+        { id: 'claude-sonnet-4-20250514', label: 'Sonnet 4' },
+        { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
+    ],
+    gemini: [
+        { id: 'gemini-2.5-flash', label: '2.5 Flash' },
+        { id: 'gemini-2.5-pro', label: '2.5 Pro' },
+        { id: 'gemini-2.0-flash', label: '2.0 Flash' },
+    ],
+    openai: [
+        { id: 'gpt-4o', label: 'GPT-4o' },
+        { id: 'gpt-4o-mini', label: 'GPT-4o mini' },
+        { id: 'gpt-4.1', label: 'GPT-4.1' },
+        { id: 'gpt-4.1-mini', label: 'GPT-4.1 mini' },
+        { id: 'gpt-4.1-nano', label: 'GPT-4.1 nano' },
+        { id: 'o3', label: 'o3' },
+        { id: 'o4-mini', label: 'o4-mini' },
+    ],
+    deepseek: [
+        { id: 'deepseek-chat', label: 'Chat' },
+        { id: 'deepseek-reasoner', label: 'Reasoner' },
+    ],
+    mistral: [
+        { id: 'mistral-large-latest', label: 'Large' },
+        { id: 'mistral-medium-latest', label: 'Medium' },
+        { id: 'mistral-small-latest', label: 'Small' },
+        { id: 'open-mistral-nemo', label: 'Nemo' },
+        { id: 'codestral-latest', label: 'Codestral' },
+    ],
+};
+
+function getCurrentModelLabel(cfg) {
+    const provider = cfg.llmProvider || 'anthropic';
+    const models = PROVIDER_MODELS[provider] || [];
+    let currentId;
+    if (provider === 'anthropic') currentId = cfg.model;
+    else if (provider === 'gemini') currentId = cfg.geminiModel;
+    else if (provider === 'ollama') currentId = cfg.ollamaModel;
+    else currentId = cfg.openaiModel;
+    const found = models.find(m => m.id === currentId);
+    if (found) return found.label;
+    // Fallback: show raw model id truncated
+    if (currentId) return currentId.length > 16 ? currentId.slice(0, 14) + '…' : currentId;
+    return provider.charAt(0).toUpperCase() + provider.slice(1);
+}
 
 export default function ChatbotFullpage() {
     const [showConfig,   setShowConfig]   = useState(false);
@@ -45,6 +95,9 @@ export default function ChatbotFullpage() {
     const [selectedDocs, setSelectedDocs] = useState([]); // [{id, title, fileName, mimeType, size, contentUrl, adaptedImages}]
     const [droppedFiles, setDroppedFiles] = useState([]); // [{file: File, preview: string}]
     const [isDragOver, setIsDragOver] = useState(false);
+    const [showModelMenu, setShowModelMenu] = useState(false);
+    const [dynamicModels, setDynamicModels] = useState([]); // for Ollama / OpenAI-compat
+    const modelMenuRef = useRef(null);
     const t = getDictionary(locale);
     const supportedLocales = getSupportedLocales();
     // tiene traccia se la sessione corrente è già stata creata su Liferay
@@ -85,18 +138,57 @@ export default function ChatbotFullpage() {
         return () => document.removeEventListener('mousedown', handler);
     }, [showAttachMenu]);
 
+    // Close model menu on outside click
+    useEffect(() => {
+        if (!showModelMenu) return;
+        const handler = (e) => {
+            if (modelMenuRef.current && !modelMenuRef.current.contains(e.target)) {
+                setShowModelMenu(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, [showModelMenu]);
+
+    // Fetch dynamic models for Ollama / OpenAI-compat when menu opens
+    useEffect(() => {
+        if (!showModelMenu) return;
+        const provider = cfg.llmProvider;
+        if (provider === 'ollama') {
+            fetchOllamaModels(cfg).then(models => setDynamicModels(models.map(m => ({ id: m, label: m }))))
+                .catch(() => setDynamicModels([]));
+        } else if (['openai', 'deepseek', 'mistral'].includes(provider)) {
+            fetchOpenAIModels(cfg).then(models => setDynamicModels(models.map(m => ({ id: m, label: m }))))
+                .catch(() => setDynamicModels([]));
+        } else {
+            setDynamicModels([]);
+        }
+    }, [showModelMenu, cfg.llmProvider]);
+
     const { runAgent } = useAgentFP({
         cfg, history, setHistory, setMessages,
     });
 
     const providerLabel = useMemo(() => {
         if (cfg.llmProvider === 'gemini') return 'Gemini';
-        if (cfg.llmProvider === 'ollama') return `Ollama${cfg.ollamaModel ? ' · ' + cfg.ollamaModel : ''}`;
-        if (cfg.llmProvider === 'openai') return `OpenAI${cfg.openaiModel ? ' · ' + cfg.openaiModel : ''}`;
-        if (cfg.llmProvider === 'deepseek') return `DeepSeek${cfg.openaiModel ? ' · ' + cfg.openaiModel : ''}`;
-        if (cfg.llmProvider === 'mistral') return `Mistral${cfg.openaiModel ? ' · ' + cfg.openaiModel : ''}`;
+        if (cfg.llmProvider === 'ollama') return 'Ollama';
+        if (cfg.llmProvider === 'openai') return 'OpenAI';
+        if (cfg.llmProvider === 'deepseek') return 'DeepSeek';
+        if (cfg.llmProvider === 'mistral') return 'Mistral';
         return 'Claude';
-    }, [cfg.llmProvider, cfg.ollamaModel, cfg.openaiModel]);
+    }, [cfg.llmProvider]);
+
+    const handleModelChange = useCallback((modelId) => {
+        const provider = cfg.llmProvider;
+        let updated;
+        if (provider === 'anthropic') updated = { ...cfg, model: modelId };
+        else if (provider === 'gemini') updated = { ...cfg, geminiModel: modelId };
+        else if (provider === 'ollama') updated = { ...cfg, ollamaModel: modelId };
+        else updated = { ...cfg, openaiModel: modelId };
+        setCfg(updated);
+        saveCfg(updated);
+        setShowModelMenu(false);
+    }, [cfg]);
 
     // CSS vars tema
     const themeStyle = useMemo(() => ({
@@ -260,6 +352,8 @@ export default function ChatbotFullpage() {
         sessionCreatedRef.current = false;
         chatHistory.resetCurrentSession();
         resetUsageSession();
+        setShowConfig(false);
+        setShowUsage(false);
     }, [chatHistory]);
 
     const handleRegenerate = useCallback((sourceQuery) => {
@@ -485,8 +579,8 @@ export default function ChatbotFullpage() {
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                     </button>
                 )}
-                <button className="afp-rail-icon" onClick={() => setShowConfig(true)} title={t.railSettings}>⚙</button>
-                <button className="afp-rail-icon" onClick={() => setShowUsage(true)} title={t.railUsage || 'Usage'}>
+                <button className="afp-rail-icon" onClick={() => { setShowConfig(true); setShowUsage(false); }} title={t.railSettings}>⚙</button>
+                <button className="afp-rail-icon" onClick={() => { setShowUsage(true); setShowConfig(false); }} title={t.railUsage || 'Usage'}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="12" width="4" height="9"/><rect x="10" y="7" width="4" height="14"/><rect x="17" y="3" width="4" height="18"/></svg>
                 </button>
                 <div className="afp-rail-spacer"></div>
@@ -558,7 +652,7 @@ export default function ChatbotFullpage() {
                 {/* Footer sidebar — Impostazioni + utente */}
                 <div className="afp-sidebar-footer">
                     <button className="afp-sidebar-footer-btn"
-                        onClick={() => setShowConfig(true)}>
+                        onClick={() => { setShowConfig(true); setShowUsage(false); }}>
                         {t.sidebarSettings}
                     </button>
                     <div className="afp-sidebar-user" title={window.Liferay?.ThemeDisplay?.getUserName?.() || t.sidebarUser}>
@@ -720,12 +814,33 @@ n                                style={{ display: 'none' }}
                             onKeyDown={handleKey}
                             disabled={busy}
                         />
-                        <button
-                            className="afp-send-btn"
-                            onClick={handleSend}
-                            disabled={busy || (!input.trim() && selectedDocs.length === 0 && droppedFiles.length === 0)}
-                            title={t.sendButton}
-                        >➤</button>
+                        <div className="afp-model-pill-wrapper" ref={modelMenuRef}>
+                            <button
+                                className="afp-model-pill"
+                                onClick={() => setShowModelMenu(v => !v)}
+                                title={providerLabel}
+                            >
+                                <span className="afp-model-pill-label">{getCurrentModelLabel(cfg)}</span>
+                                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2.5 3.75L5 6.25L7.5 3.75"/></svg>
+                            </button>
+                            {showModelMenu && (
+                                <div className={`afp-model-menu${!hasMessages ? ' afp-model-menu--down' : ''}`}>
+                                    {(PROVIDER_MODELS[cfg.llmProvider] || []).concat(dynamicModels).map(m => {
+                                        let isActive;
+                                        if (cfg.llmProvider === 'anthropic') isActive = cfg.model === m.id;
+                                        else if (cfg.llmProvider === 'gemini') isActive = cfg.geminiModel === m.id;
+                                        else if (cfg.llmProvider === 'ollama') isActive = cfg.ollamaModel === m.id;
+                                        else isActive = cfg.openaiModel === m.id;
+                                        return (
+                                            <button key={m.id}
+                                                className={`afp-model-menu-item${isActive ? ' afp-model-menu-item-active' : ''}`}
+                                                onClick={() => handleModelChange(m.id)}
+                                            >{m.label}</button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
                     </div>
                     <div className="afp-input-hint">{t.inputHint}</div>
                 </div>
