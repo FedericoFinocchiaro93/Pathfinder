@@ -68,6 +68,36 @@ export default {
     sendButton: 'Invia (Enter)',
     inputHint: 'Premi Enter per inviare · Shift+Enter per nuova riga',
 
+    // ── Document Picker ──
+    docPickerTitle: '📎 Seleziona Documenti',
+    docPickerClose: 'Chiudi',
+    docPickerSearch: 'Cerca documenti…',
+    docPickerClearSearch: 'Cancella ricerca',
+    docPickerRoot: 'Radice',
+    docPickerGridView: 'Vista griglia',
+    docPickerListView: 'Vista lista',
+    docPickerDocuments: 'documenti',
+    docPickerLoading: 'Caricamento…',
+    docPickerNoResults: 'Nessun documento trovato',
+    docPickerEmpty: 'Questa cartella è vuota',
+    docPickerLoadMore: 'Carica altri…',
+    docPickerDocumentSelected: 'documento selezionato',
+    docPickerDocumentsSelected: 'documenti selezionati',
+    docPickerSelect: 'Seleziona',
+    docPickerDeselect: 'Deseleziona',
+    docPickerConfirm: '✓ Aggiungi alla chat',
+    docPickerAttachBtn: 'Allega documento',
+    attachFromDML: 'Carica file dalla DML',
+    attachFromComputer: 'Carica dal computer',
+    docPickerExtracting: 'Estrazione contenuto dal documento…',
+    docPickerExtractError: 'Errore nell\'estrazione del contenuto del documento',
+    docPickerAddedToChat: 'Documento aggiunto alla chat',
+
+    // ── Drag & Drop ──
+    dropFilesHere: 'Trascina i file qui per allegarli',
+    droppedFilesPlaceholder: 'Aggiungi un messaggio o premi Invio per inviare',
+    uploadingDocument: 'Caricamento documento…',
+
     // ── Chips ──
     chips: [
         { icon: '🔍', text: 'Quanti contenuti web ci sono nel portale?' },
@@ -104,6 +134,9 @@ export default {
     listingObjectEntryFolders: 'Sto elencando le cartelle Object Entry…',
     updatingContentFolder: 'Aggiorno la cartella contenuti "{query}"…',
     updatingObjectEntryFolder: 'Aggiorno la cartella Object Entry "{query}"…',
+    pickingDocument: 'Recupero il documento "{query}"…',
+    listingDocumentFolders: 'Sto elencando le cartelle documenti…',
+    listingFolderDocuments: 'Sto elencando i documenti nella cartella "{query}"…',
 
     // ── Config Panel ──
     configTitle: '⚙ Impostazioni',
@@ -313,6 +346,34 @@ SC3. LIMITAZIONI STRUTTURE:
   - date/date_time richiedono formato ISO-8601 con timezone (es. "2025-01-15T00:00:00Z")
   - geolocation: usa value_geo con {latitude, longitude}
   - document_library/image: usa value_document_id con l'ID del documento`,
+
+        rule7b: `━━━ DOCUMENTI ALLEGATI ━━━
+Quando l'utente allega documenti dalla Document Library, ricevi informazioni come:
+[Image: astronaut.png] (ID: 34064, MIME: image/png, Size: 23 KB) — URL: http://...
+[Document: report.pdf] (ID: 12345, MIME: application/pdf, Size: 1.2 MB) — URL: http://...
+
+IMPORTANTE: Quando l'utente chiede di usare un documento allegato (es. "usa questa immagine nel contenuto"):
+1. Per i campi image e document_library in create_structured_content, usa l'ID del documento come value_document_id
+   Esempio: fields: [{ name: "immagine", value_document_id: 34064 }]
+2. L'ID è indicato come "ID: XXXXX" nel contesto del documento allegato
+3. NON usare l'URL del documento — usa SEMPRE l'ID numerico come value_document_id`,
+
+        rule7c: `━━━ FILE TRASCINATI (DRAG & DROP) ━━━
+Quando l'utente trascina file nella chat, ricevi informazioni come:
+- File 0: "foto.png" (image/png, 132 KB)
+
+I file sono salvati temporaneamente e possono essere caricati nella Document Library usando il tool upload_document.
+
+REGOLE IMPORTANTI:
+1. NON caricare automaticamente i file — caricali SOLO quando l'utente lo chiede ESPPLICITAMENTE:
+   - "Carica questa immagine nella Document Library"
+   - "Salva questo file"
+   - "Usa questa immagine in un contenuto web" (richiede prima il caricamento)
+2. Quando l'utente chiede di usare un'immagine trascinata in un contenuto web:
+   a. Prima chiama upload_document per caricare il file nella Document Library
+   b. Poi usa l'ID del documento restituito come value_document_id in create_structured_content
+3. Il parametro file_index in upload_document è basato su 0 (0 = primo file, 1 = secondo, ecc.)
+4. Dopo il caricamento, riceverai l'ID del documento che può essere usato come value_document_id`,
 
         rule8: `━━━ LIMITAZIONI NOTE DELLE API LIFERAY ━━━
 L1. ORGANIZZAZIONI E GRUPPI UTENTE: Le API Headless NON supportano l'associazione di un utente a un'organizzazione né a un gruppo utente. Se richiesto, spiega che non è possibile via API e suggerisci Control Panel → Users → Edit User → Organizations / User Groups.

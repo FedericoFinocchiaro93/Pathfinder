@@ -5,7 +5,7 @@
 
 import { dbg } from './utils.js';
 import {
-    liferayGet, liferayPost, liferayPut, liferayPatch, liferayDelete, getBaseUrl, getSiteId,
+    liferayGet, liferayPost, liferayPut, liferayPatch, liferayDelete, liferayUploadDocument, getBaseUrl, getSiteId,
     buildKeywordFilter, encodeFilter,
     parseStructuredContentItem,
     fetchApiList, fetchApiSpec,
@@ -13,6 +13,13 @@ import {
     getCachedResponse, setCachedResponse,
 } from './liferay.js';
 import { buildIndex, findBestUrl } from './pageIndex.js';
+
+function _formatDocSize(bytes) {
+    if (!bytes) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
 import { _apiSpecCache } from './cache.js';
 import { buildField, normalizeFieldType, buildI18nLabel, validateFields } from './objectFieldBuilder.js';
 import { ensureObjectExists, findObjectDefinitionWithFields, updateObjectField, addObjectField, deleteObjectField } from './objectManager.js';
@@ -71,6 +78,7 @@ const NO_SITE_TOOLS = new Set([
     'get_object_fields', 'update_object_field', 'add_object_field', 'delete_object_field',
     'create_object', 'delete_object',
     'create_content_structure', 'create_content_folder', 'list_content_folders', 'delete_content_folder', 'update_content_folder', 'create_object_entry_folder', 'list_object_entry_folders', 'delete_object_entry_folder', 'update_object_entry_folder', 'create_structured_content', 'update_structured_content',
+    'pick_document', 'list_document_folders', 'list_folder_documents', 'upload_document',
     'get_content_structure_fields',
     'update_space', 'delete_space', 'create_space', 'connect_space_site', 'disconnect_space_site',
     'assign_user_to_space', 'remove_user_from_space',
@@ -147,7 +155,7 @@ export async function executeTool(name, input, cfg) {
         }
 
         if (name === 'search_documents') {
-            let qs = `pageSize=${ps}`; if (q) qs = `search=${q}&` + qs; if (input.filter) qs += `&filter=${encodeFilter(input.filter)}`; if (input.sort) qs += `&sort=${encodeURIComponent(input.sort)}`;
+            let qs = `pageSize=${ps}&flatten=true`; if (q) qs = `search=${q}&` + qs; if (input.filter) qs += `&filter=${encodeFilter(input.filter)}`; if (input.sort) qs += `&sort=${encodeURIComponent(input.sort)}`;
             const data = await liferayGet(base, `/o/headless-delivery/v1.0/sites/${siteId}/documents?${qs}`, user, pass);
             if (data.items) data.items = data.items.map((doc) => ({ ...doc, taxonomyCategories: (doc.taxonomyCategoryBriefs || []).map((b) => ({ id: b.taxonomyCategoryId, name: b.taxonomyCategoryName })) }));
             return data;
@@ -1027,6 +1035,11 @@ export async function executeTool(name, input, cfg) {
             dbg(`create_structured_content: raw input=`, JSON.stringify(input).substring(0, 500));
             if (inputFields.length > 0) {
                 dbg(`create_structured_content: fields detail=`, JSON.stringify(inputFields).substring(0, 1000));
+                // Log document fields specifically for debugging
+                const docFields = inputFields.filter(f => f.value_document_id);
+                if (docFields.length > 0) {
+                    dbg(`create_structured_content: DOCUMENT fields detected:`, docFields.map(f => `name=${f.name}, value_document_id=${f.value_document_id} (type=${typeof f.value_document_id})`).join(', '));
+                }
             }
 
             try {
@@ -1093,7 +1106,16 @@ export async function executeTool(name, input, cfg) {
                     if (f.value_geo && f.value_geo.latitude !== undefined) {
                         fieldValue.geo = { latitude: f.value_geo.latitude, longitude: f.value_geo.longitude };
                     } else if (f.value_document_id) {
-                        fieldValue.document = { id: f.value_document_id };
+                        const docId = parseInt(f.value_document_id, 10);
+                        // Use 'image' for image fields, 'document' for document_library fields
+                        const fieldType = fieldTypes[f.name] || '';
+                        if (fieldType === 'image') {
+                            dbg(`create_structured_content: PATCH setting IMAGE field '${f.name}' to image ID=${docId}`);
+                            fieldValue.image = { id: docId };
+                        } else {
+                            dbg(`create_structured_content: PATCH setting DOCUMENT field '${f.name}' to document ID=${docId}`);
+                            fieldValue.document = { id: docId };
+                        }
                     } else {
                         fieldValue.data = convertFieldValue(f.value, fieldTypes[f.name]);
                     }
@@ -1262,7 +1284,16 @@ export async function executeTool(name, input, cfg) {
                     if (f.value_geo && f.value_geo.latitude !== undefined) {
                         fieldValue.geo = { latitude: f.value_geo.latitude, longitude: f.value_geo.longitude };
                     } else if (f.value_document_id) {
-                        fieldValue.document = { id: f.value_document_id };
+                        const docId = parseInt(f.value_document_id, 10);
+                        // Use 'image' for image fields, 'document' for document_library fields
+                        const fieldType = fieldTypes[f.name] || '';
+                        if (fieldType === 'image') {
+                            dbg(`update_structured_content: setting IMAGE field '${f.name}' to image ID=${docId}`);
+                            fieldValue.image = { id: docId };
+                        } else {
+                            dbg(`update_structured_content: setting DOCUMENT field '${f.name}' to document ID=${docId}`);
+                            fieldValue.document = { id: docId };
+                        }
                     } else {
                         fieldValue.data = convertFieldValue(f.value, fieldTypes[f.name]);
                     }
@@ -2794,6 +2825,184 @@ export async function executeTool(name, input, cfg) {
                 await liferayDelete(base, `/o/headless-asset-library/v1.0/asset-libraries/${input.spaceErc}/user-accounts/${input.userErc}`, user, pass);
                 return { success: true, message: `Utente "${input.userErc}" rimosso dallo Space con successo` };
             } catch (e) { return { error: e.message || String(e), spaceErc: input.spaceErc, userErc: input.userErc }; }
+        }
+
+        // ── PICK DOCUMENT ─────────────────────────────────────────────────────
+        if (name === 'pick_document') {
+            if (!input?.document_id) return { error: 'document_id obbligatorio. Usa search_documents per trovare l\'ID del documento.' };
+            const docId = input.document_id;
+            const extractText = input.extract_text !== false; // default true
+            try {
+                // Fetch document metadata
+                const doc = await liferayGet(base, `/o/headless-delivery/v1.0/documents/${docId}`, user, pass);
+                const result = {
+                    id: doc.id,
+                    title: doc.title || doc.fileName || 'Untitled',
+                    fileName: doc.fileName || '',
+                    mimeType: doc.mimeType || '',
+                    size: doc.size || 0,
+                    contentUrl: doc.contentUrl || '',
+                    dateCreated: doc.dateCreated || '',
+                    dateModified: doc.dateModified || '',
+                    description: doc.description || '',
+                    adaptedImages: (doc.adaptedImages || []).map(img => ({
+                        resolution: img.resolution,
+                        contentUrl: img.contentUrl,
+                    })),
+                };
+
+                // Try to extract text content for text-based documents
+                if (extractText && doc.contentUrl) {
+                    const contentUrl = doc.contentUrl.startsWith('http') ? doc.contentUrl : base + doc.contentUrl;
+                    const mimeType = (doc.mimeType || '').toLowerCase();
+
+                    if (mimeType.startsWith('text/') || mimeType.includes('json') || mimeType.includes('xml') || mimeType.includes('csv') || mimeType === 'application/javascript') {
+                        try {
+                            const textRes = await fetch(contentUrl, { headers: { Authorization: 'Basic ' + btoa(user + ':' + pass) } });
+                            if (textRes.ok) {
+                                const text = await textRes.text();
+                                result.textContent = text.length > 10000 ? text.substring(0, 10000) + '\n[...truncated, total ' + text.length + ' chars]' : text;
+                                result.textExtracted = true;
+                            }
+                        } catch (_) { /* ignore extraction errors */ }
+                    } else if (mimeType === 'application/pdf') {
+                        result.textContent = '[PDF content not directly extractable via REST API. Use the contentUrl to download the PDF.]';
+                        result.textExtracted = false;
+                    } else if (mimeType.includes('word') || mimeType.includes('officedocument') || mimeType.includes('spreadsheet') || mimeType.includes('presentation')) {
+                        result.textContent = '[Office document content not directly extractable via REST API. Use the contentUrl to download the file.]';
+                        result.textExtracted = false;
+                    } else if (mimeType.startsWith('image/')) {
+                        result.textContent = `[Image: ${doc.title}] (${mimeType}, ${doc.size} bytes)`;
+                        result.textExtracted = false;
+                    }
+                }
+
+                return result;
+            } catch (e) {
+                return { error: `Errore nel recupero del documento ${docId}: ${e.message}` };
+            }
+        }
+
+        // ── LIST DOCUMENT FOLDERS ──────────────────────────────────────────────
+        if (name === 'list_document_folders') {
+            const pageSize = input?.page_size || 50;
+            const parentId = input?.parent_folder_id;
+            try {
+                let url;
+                if (parentId) {
+                    url = `/o/headless-delivery/v1.0/document-folders/${parentId}/document-folders?pageSize=${pageSize}`;
+                } else {
+                    url = `/o/headless-delivery/v1.0/sites/${siteId}/document-folders?pageSize=${pageSize}`;
+                }
+                const data = await liferayGet(base, url, user, pass);
+                const folders = (data.items || []).map(f => ({
+                    id: f.id,
+                    name: f.name || 'Unnamed',
+                    description: f.description || '',
+                    parentDocumentFolderId: f.parentDocumentFolderId || null,
+                    dateCreated: f.dateCreated || '',
+                    dateModified: f.dateModified || '',
+                    numberOfDocuments: f.numberOfDocuments || 0,
+                    numberOfDocumentFolders: f.numberOfDocumentFolders || 0,
+                }));
+                return {
+                    totalCount: data.totalCount || folders.length,
+                    folders,
+                    message: folders.length === 0
+                        ? 'Nessuna cartella trovata.'
+                        : `Trovate ${folders.length} cartelle.`,
+                };
+            } catch (e) {
+                return { error: `Errore nel recupero delle cartelle documenti: ${e.message}` };
+            }
+        }
+
+        // ── LIST FOLDER DOCUMENTS ─────────────────────────────────────────────
+        if (name === 'list_folder_documents') {
+            if (!input?.folder_id) return { error: 'folder_id obbligatorio. Usa list_document_folders per trovare l\'ID della cartella.' };
+            const page = input?.page || 1;
+            const pageSize = input?.page_size || 20;
+            try {
+                const data = await liferayGet(base, `/o/headless-delivery/v1.0/document-folders/${input.folder_id}/documents?page=${page}&pageSize=${pageSize}`, user, pass);
+                const documents = (data.items || []).map(doc => ({
+                    id: doc.id,
+                    title: doc.title || doc.fileName || 'Untitled',
+                    fileName: doc.fileName || '',
+                    mimeType: doc.mimeType || '',
+                    size: doc.size || 0,
+                    dateCreated: doc.dateCreated || '',
+                    dateModified: doc.dateModified || '',
+                    description: doc.description || '',
+                    contentUrl: doc.contentUrl || '',
+                }));
+                return {
+                    totalCount: data.totalCount || 0,
+                    page,
+                    pageSize,
+                    documents,
+                    message: documents.length === 0
+                        ? 'Nessun documento in questa cartella.'
+                        : `Trovati ${data.totalCount} documenti (pagina ${page}, ${documents.length} risultati).`,
+                };
+            } catch (e) {
+                return { error: `Errore nel recupero dei documenti dalla cartella ${input.folder_id}: ${e.message}` };
+            }
+        }
+
+        // ── UPLOAD DOCUMENT ──────────────────────────────────────────────────
+        if (name === 'upload_document') {
+            const fileIndex = input?.file_index || 0;
+            const title = input?.title || '';
+            const folderId = input?.folder_id || 0;
+
+            // Get pending files from cfg
+            const pendingFiles = cfg._pendingFiles || [];
+            if (pendingFiles.length === 0) {
+                return { error: 'Nessun file allegato trovato. L\'utente deve prima trascinare o allegare un file nella chat prima di poterlo caricare nella Document Library.' };
+            }
+            if (fileIndex >= pendingFiles.length) {
+                return { error: `Indice file ${fileIndex} non valido. Ci sono solo ${pendingFiles.length} file allegati (indici 0-${pendingFiles.length - 1}).` };
+            }
+
+            const pendingFile = pendingFiles[fileIndex];
+            try {
+                // Convert base64 to Blob
+                const byteCharacters = atob(pendingFile.data);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], { type: pendingFile.type });
+
+                const docTitle = title || pendingFile.name;
+                const doc = await liferayUploadDocument(base, siteId, blob, pendingFile.name, docTitle, folderId || undefined, user, pass);
+
+                const result = {
+                    success: true,
+                    id: doc.id,
+                    title: doc.title || doc.fileName,
+                    fileName: doc.fileName || '',
+                    mimeType: doc.mimeType || pendingFile.type,
+                    size: doc.size || pendingFile.size,
+                    contentUrl: doc.contentUrl || '',
+                    dateCreated: doc.dateCreated || '',
+                    message: `✅ File "${doc.title || doc.fileName}" caricato con successo nella Document Library.\n\nID documento: ${doc.id}\nTipo: ${doc.mimeType || pendingFile.type}\nDimensione: ${_formatDocSize(doc.size || pendingFile.size)}\n\nPuoi usare questo ID (${doc.id}) come value_document_id nei campi image o document_library di create_structured_content e update_structured_content.`,
+                };
+
+                // If the file is an image, add adaptedImages info
+                if (doc.adaptedImages && doc.adaptedImages.length > 0) {
+                    result.adaptedImages = doc.adaptedImages.map(img => ({
+                        resolution: img.resolution,
+                        contentUrl: img.contentUrl,
+                    }));
+                    result.message += `\n\n⚠️ IMPORTANTE: Questo è un file immagine. Per usarlo in un campo image di un contenuto web, usa value_document_id: ${doc.id}.`;
+                }
+
+                return result;
+            } catch (e) {
+                return { error: `Errore nel caricamento del file "${pendingFile.name}": ${e.message}` };
+            }
         }
 
         return { error: `Tool sconosciuto: ${name}` };

@@ -21,6 +21,7 @@ import ConfigPanelFP     from './ui/ConfigPanelFP.jsx';
 import UsagePanelFP     from './ui/UsagePanelFP.jsx';
 import ConsentScreenFP, { hasConsented } from './ui/ConsentScreenFP.jsx';
 import EulaModalFP      from './ui/EulaModalFP.jsx';
+import DocumentPicker    from './ui/DocumentPicker.jsx';
 import { resetSession as resetUsageSession } from '../lib/llmUsageTracker.js';
 import botIcon           from '../img/Copilot_20260516_162708.png';
 
@@ -38,6 +39,12 @@ export default function ChatbotFullpage() {
     const [busy,         setBusy]         = useState(false);
     const [input,        setInput]        = useState('');
     const [locale,       setLocaleState]  = useState(getLocale);
+    const [showDocPicker, setShowDocPicker] = useState(false);
+    const [showAttachMenu, setShowAttachMenu] = useState(false);
+    const fileInputRef = useRef(null);
+    const [selectedDocs, setSelectedDocs] = useState([]); // [{id, title, fileName, mimeType, size, contentUrl, adaptedImages}]
+    const [droppedFiles, setDroppedFiles] = useState([]); // [{file: File, preview: string}]
+    const [isDragOver, setIsDragOver] = useState(false);
     const t = getDictionary(locale);
     const supportedLocales = getSupportedLocales();
     // tiene traccia se la sessione corrente è già stata creata su Liferay
@@ -66,6 +73,18 @@ export default function ChatbotFullpage() {
         return () => window.removeEventListener('chatbot-locale-change', handler);
     }, []);
 
+    // Close attach menu on outside click
+    useEffect(() => {
+        if (!showAttachMenu) return;
+        const handler = (e) => {
+            if (!e.target.closest('.afp-attach-wrapper')) {
+                setShowAttachMenu(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, [showAttachMenu]);
+
     const { runAgent } = useAgentFP({
         cfg, history, setHistory, setMessages,
     });
@@ -87,9 +106,124 @@ export default function ChatbotFullpage() {
         '--afp-bot-bubble':  cfg.colorBotBubble  || '#ffffff',
     }), [cfg.colorPrimary, cfg.colorAccent, cfg.colorUserBubble, cfg.colorBotBubble]);
 
-    const handleSend = useCallback(() => {
+    const handleSend = useCallback(async () => {
         const text = input.trim();
-        if (!text || busy) return;
+        if (busy) return;
+
+        // ── Se ci sono file droppati, passali al LLM come contesto ──────────
+        // NON caricarli nella DML — sarà l'LLM a decidere se chiamare upload_document
+        if (droppedFiles.length > 0) {
+            setInput('');
+            if (textareaRef.current) textareaRef.current.style.height = '';
+
+            // Converti i file in base64 e salvali in cfg._pendingFiles per il tool executor
+            const pendingFiles = [];
+            for (const fileObj of droppedFiles) {
+                try {
+                    const data = await fileToBase64(fileObj.file);
+                    pendingFiles.push({
+                        name: fileObj.file.name,
+                        type: fileObj.file.type || 'application/octet-stream',
+                        size: fileObj.file.size,
+                        data: data, // base64 string
+                    });
+                } catch (e) {
+                    console.error('Error reading file:', e);
+                }
+            }
+            cfg._pendingFiles = pendingFiles;
+
+            // Mostra anteprima nella chat
+            const filePreviews = droppedFiles.map(f => ({
+                name: f.file.name,
+                type: f.file.type,
+                size: f.file.size,
+                preview: f.preview,
+            }));
+            const userText = text || (droppedFiles.length === 1 ? `📎 ${droppedFiles[0].file.name}` : `📎 ${droppedFiles.length} file allegati`);
+
+            // Costruisci il contesto per il LLM
+            const fileInfoList = pendingFiles.map((f, i) =>
+                `- File ${i}: "${f.name}" (${f.type}, ${formatDocSize(f.size)})`
+            ).join('\n');
+            const isImage = pendingFiles.some(f => f.type.startsWith('image/'));
+            const uploadHint = isImage
+                ? `\n\n💡 Se l'utente chiede di caricare questa immagine nella Document Library, usa il tool upload_document. Se chiede di usarla in un contenuto web, carica prima il file con upload_document, poi usa l'ID restituito come value_document_id nel campo image.`
+                : `\n\n💡 Se l'utente chiede di caricare questo file nella Document Library, usa il tool upload_document.`;
+            const llmText = `📎 L'utente ha allegato ${pendingFiles.length === 1 ? 'il seguente file' : 'i seguenti file'}:\n\n${fileInfoList}${uploadHint}\n\n${text || 'Analizza questo file e rispondi alle domande dell\'utente.'}`;
+
+            // Aggiungi messaggio utente con anteprima file
+            setMessages(prev => [...prev, {
+                id: Date.now() + Math.random(),
+                role: 'user',
+                text: userText,
+                droppedFiles: filePreviews,
+            }]);
+
+            // Pulisci i file droppati (le anteprime URL vengono revocate)
+            droppedFiles.forEach(f => { if (f.preview) URL.revokeObjectURL(f.preview); });
+            setDroppedFiles([]);
+
+            if (!sessionCreatedRef.current && cfg.chatHistoryEnabled) {
+                sessionCreatedRef.current = true;
+                chatHistory.createSession(llmText, [...messages, { id: Date.now() + Math.random(), role: 'user', text: llmText }], history);
+            }
+
+            runAgent(llmText, setBusy, null);
+            return;
+        }
+
+        // Se ci sono documenti selezionati, includili nel messaggio
+        if (selectedDocs.length > 0) {
+            if (!text && selectedDocs.length === 0) return;
+            setInput('');
+            if (textareaRef.current) textareaRef.current.style.height = '';
+
+            // Estrai il contenuto dei documenti per il LLM
+            const docContents = await Promise.all(selectedDocs.map(doc => extractDocumentContent(doc)));
+            const docInfo = selectedDocs.map((doc, i) => ({
+                id: doc.id,
+                title: doc.title,
+                fileName: doc.fileName,
+                mimeType: doc.mimeType,
+                size: doc.size,
+                contentUrl: doc.contentUrl,
+                adaptedImages: doc.adaptedImages,
+            }));
+
+            // Testo visibile nella chat (solo anteprima, senza contenuto estratto)
+            const userText = text || (selectedDocs.length === 1 ? '📎 Documento allegato' : `📎 ${selectedDocs.length} documenti allegati`);
+
+            // Testo per il LLM (con contenuto estratto dei documenti)
+            // Include explicit instructions on how to use document IDs with create_structured_content
+            const docIds = selectedDocs.map(d => `- "${d.title}" (ID: ${d.id}, tipo: ${d.mimeType || 'sconosciuto'})`).join('\n');
+            const docUsageHint = selectedDocs.some(d => d.mimeType && d.mimeType.startsWith('image/'))
+                ? `\n\n⚠️ IMPORTANTE: Per usare un'immagine allegata in un contenuto web (campo image o document_library), devi usare value_document_id con l'ID numerico del documento. NON usare l'URL o il nome del file.\nEsempio: fields: [{ name: "nome_campo_immagine", value_document_id: ${selectedDocs.find(d => d.mimeType?.startsWith('image/'))?.id} }]`
+                : selectedDocs.some(d => d.mimeType && !d.mimeType.startsWith('image/'))
+                    ? `\n\n⚠️ IMPORTANTE: Per usare un documento allegato in un contenuto web (campo document_library), devi usare value_document_id con l'ID numerico del documento. NON usare l'URL o il nome del file.\nEsempio: fields: [{ name: "nome_campo_documento", value_document_id: ${selectedDocs.find(d => d.mimeType && !d.mimeType?.startsWith('image/'))?.id} }]`
+                    : '';
+            const docText = docContents.join('\n\n---\n\n');
+            const llmText = selectedDocs.length === 1
+                ? `📎 L'utente ha allegato il seguente documento:\n\n${docText}\n\nDocumento allegato: "${selectedDocs[0].title}" (ID: ${selectedDocs[0].id})${docUsageHint}\n\n${text ? text : 'Analizza questo documento e rispondi alle mie domande su di esso.'}`
+                : `📎 L'utente ha allegato ${selectedDocs.length} documenti:\n\n${docIds}\n\n${docText}\n\n${docUsageHint}\n\n${text ? text : 'Analizza questi documenti e rispondi alle mie domande.'}`;
+
+            // Aggiungi messaggio utente con anteprima documenti (solo info visibili, NO contenuto estratto)
+            setMessages(prev => [...prev, { id: Date.now() + Math.random(), role: 'user', text: userText, docs: docInfo }]);
+
+            setSelectedDocs([]);
+
+            // Prima esecuzione della sessione corrente: crea il record su Liferay
+            if (!sessionCreatedRef.current && cfg.chatHistoryEnabled) {
+                sessionCreatedRef.current = true;
+                chatHistory.createSession(llmText, [...messages, { id: Date.now() + Math.random(), role: 'user', text: llmText }], history);
+            }
+
+            // Pass null as displayText because we already added the user message manually with docs preview
+            runAgent(llmText, setBusy, null);
+            return;
+        }
+
+        if (!text) return;
         setInput('');
         if (textareaRef.current) textareaRef.current.style.height = '';
 
@@ -103,7 +237,7 @@ export default function ChatbotFullpage() {
         }
 
         runAgent(text, setBusy);
-    }, [input, busy, runAgent, messages, history, chatHistory]);
+    }, [input, busy, runAgent, messages, history, chatHistory, selectedDocs, extractDocumentContent, droppedFiles]);
 
     const handleKey = useCallback((e) => {
         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -187,6 +321,133 @@ export default function ChatbotFullpage() {
             sessionCreatedRef.current = false;
         }
     }, [chatHistory]);
+
+    // ── Document Picker: selezione documenti ──────────────────────────────────
+    const handleDocPickerSelect = useCallback((docs) => {
+        setSelectedDocs(prev => {
+            // Evita duplicati
+            const existingIds = new Set(prev.map(d => d.id));
+            const newDocs = docs.filter(d => !existingIds.has(d.id));
+            return [...prev, ...newDocs];
+        });
+    }, []);
+
+    const handleRemoveDoc = useCallback((docId) => {
+        setSelectedDocs(prev => prev.filter(d => d.id !== docId));
+    }, []);
+
+    const handleClearDocs = useCallback(() => {
+        setSelectedDocs([]);
+    }, []);
+
+    // ── Drag & Drop file handling ────────────────────────────────────────────
+    const handleDragOver = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOver(true);
+    }, []);
+
+    const handleDragLeave = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOver(false);
+    }, []);
+
+    const handleDrop = useCallback((e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOver(false);
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length === 0) return;
+
+        const fileEntries = files.map(file => ({
+            file,
+            preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
+        }));
+        setDroppedFiles(prev => [...prev, ...fileEntries]);
+    }, []);
+
+    const handleRemoveDroppedFile = useCallback((index) => {
+        setDroppedFiles(prev => {
+            const removed = prev[index];
+            if (removed?.preview) URL.revokeObjectURL(removed.preview);
+            return prev.filter((_, i) => i !== index);
+        });
+    }, []);
+
+    const handleClearDroppedFiles = useCallback(() => {
+        droppedFiles.forEach(f => { if (f.preview) URL.revokeObjectURL(f.preview); });
+        setDroppedFiles([]);
+    }, [droppedFiles]);
+
+    // ── Estrazione contenuto documento per LLM ───────────────────────────────
+    const extractDocumentContent = useCallback(async (doc) => {
+        const base = (cfg.liferayUrl || '').replace(/\/+$/, '');
+
+        try {
+            // Per le immagini, restituiamo i metadati con l'ID del documento
+            // IMPORTANTE: l'ID è necessario per il tool create_structured_content (campo value_document_id)
+            if (doc.mimeType && doc.mimeType.startsWith('image/')) {
+                return `[Image: ${doc.title}] (ID: ${doc.id}, MIME: ${doc.mimeType}, Size: ${formatDocSize(doc.size)}) — URL: ${base}${doc.contentUrl}`;
+            }
+
+            // Per i PDF, restituiamo i metadati con il link per il download
+            if (doc.mimeType === 'application/pdf') {
+                return `[PDF: ${doc.title}] (ID: ${doc.id}, Size: ${formatDocSize(doc.size)}) — URL: ${base}${doc.contentUrl}`;
+            }
+
+            // Per documenti Office, restituiamo i metadati con il link
+            if (doc.mimeType && (doc.mimeType.includes('officedocument') || doc.mimeType.includes('word') || doc.mimeType.includes('spreadsheet') || doc.mimeType.includes('presentation'))) {
+                return `[Office Document: ${doc.title}] (ID: ${doc.id}, MIME: ${doc.mimeType}, Size: ${formatDocSize(doc.size)}) — URL: ${base}${doc.contentUrl}`;
+            }
+
+            // Per documenti di testo, usiamo liferayGet per ottenere i metadati via API
+            // e poi fetch autenticato per il contenuto
+            const contentUrl = doc.contentUrl.startsWith('http') ? doc.contentUrl : base + doc.contentUrl;
+            const headers = {};
+            if (cfg.lfUser && cfg.lfPass) {
+                headers['Authorization'] = 'Basic ' + btoa(cfg.lfUser + ':' + cfg.lfPass);
+            }
+            const res = await fetch(contentUrl, { headers, credentials: 'same-origin' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+            const contentType = res.headers.get('content-type') || '';
+            if (contentType.includes('text/') || contentType.includes('json') || contentType.includes('xml') || contentType.includes('csv')) {
+                const text = await res.text();
+                // Limita a 5000 caratteri per non sovraccaricare il contesto
+                const truncated = text.length > 5000 ? text.substring(0, 5000) + '\n[...truncated]' : text;
+                return `[Document: ${doc.title}] (ID: ${doc.id}, MIME: ${doc.mimeType}, Size: ${formatDocSize(doc.size)})\n\n${truncated}`;
+            }
+
+            // Per altri tipi, restituiamo solo i metadati
+            return `[Document: ${doc.title}] (ID: ${doc.id}, MIME: ${doc.mimeType}, Size: ${formatDocSize(doc.size)}) — URL: ${base}${doc.contentUrl}`;
+        } catch (e) {
+            console.error('Error extracting document content:', e);
+            return `[Document: ${doc.title}] (ID: ${doc.id}, MIME: ${doc.mimeType}, Size: ${formatDocSize(doc.size)}) — URL: ${base}${doc.contentUrl}`;
+        }
+    }, [cfg.liferayUrl, cfg.lfUser, cfg.lfPass]);
+
+    // ── Invio con documenti (rimosso — ora gestito da handleSend) ────────────
+
+    function formatDocSize(bytes) {
+        if (!bytes) return '';
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function fileToBase64(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                // Remove data URL prefix (e.g. "data:image/png;base64,")
+                const base64 = reader.result.split(',')[1];
+                resolve(base64);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
 
     const hasMessages = messages.length > 0;
 
@@ -308,7 +569,20 @@ export default function ChatbotFullpage() {
             </aside>
 
             {/* ── AREA PRINCIPALE ── */}
-            <main className="afp-main">
+            <main className={`afp-main${!hasMessages ? ' afp-main--welcome' : ''}`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+            >
+                {/* Drag overlay — full page */}
+                {isDragOver && (
+                    <div className="afp-drop-overlay">
+                        <div className="afp-drop-zone">
+                            <div className="afp-drop-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+                            <div className="afp-drop-text">{t.dropFilesHere || 'Drop files here'}</div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Header */}
                 <div className="afp-header">
@@ -356,12 +630,91 @@ export default function ChatbotFullpage() {
 
                 {/* Input bar */}
                 <div className="afp-input-area">
+                    {/* Dropped files preview */}
+                    {/* Dropped files preview */}
+                    {droppedFiles.length > 0 && (
+                        <div className="afp-dropped-files">
+                            {droppedFiles.map((f, i) => (
+                                <span key={i} className="afp-dropped-file-chip">
+                                    <span className="afp-dropped-file-chip-icon">
+                                        {f.file.type.startsWith('image/') ? '🖼️' : '📄'}
+                                    </span>
+                                    {f.preview && (
+                                        <img src={f.preview} alt="" className="afp-dropped-file-chip-thumb" />
+                                    )}
+                                    <span className="afp-dropped-file-chip-name">{f.file.name}</span>
+                                    <span className="afp-dropped-file-chip-size">{formatDocSize(f.file.size)}</span>
+                                    <button
+                                        className="afp-dropped-file-chip-remove"
+                                        onClick={() => handleRemoveDroppedFile(i)}
+                                        title={t.docPickerClose || 'Remove'}
+                                    >✕</button>
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                    {/* Selected documents chips */}
+                    {selectedDocs.length > 0 && (
+                        <div className="afp-selected-docs">
+                            {selectedDocs.map(doc => (
+                                <span key={doc.id} className="afp-selected-doc-chip">
+                                    <span className="afp-selected-doc-chip-icon">
+                                        {doc.mimeType && doc.mimeType.startsWith('image/') ? '🖼️' : '📄'}
+                                    </span>
+                                    <span className="afp-selected-doc-chip-name">{doc.title}</span>
+                                    <button
+                                        className="afp-selected-doc-chip-remove"
+                                        onClick={() => handleRemoveDoc(doc.id)}
+                                        title={t.docPickerClose || 'Remove'}
+                                    >✕</button>
+                                </span>
+                            ))}
+                        </div>
+                    )}
                     <div className="afp-input-bar">
+                        <div className="afp-attach-wrapper">
+                            <button
+                                className="afp-attach-btn"
+                                onClick={() => setShowAttachMenu(v => !v)}
+                                disabled={busy}
+                                title={t.docPickerAttachBtn || 'Attach document'}
+                            >
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            </button>
+                            {showAttachMenu && (
+                                <div className="afp-attach-menu">
+                                    <button className="afp-attach-menu-item" onClick={() => { setShowAttachMenu(false); setShowDocPicker(true); }}>
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                                        <span>{t.attachFromDML || 'Carica file dalla DML'}</span>
+                                    </button>
+                                    <button className="afp-attach-menu-item" onClick={() => { setShowAttachMenu(false); fileInputRef.current?.click(); }}>
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                        <span>{t.attachFromComputer || 'Carica dal computer'}</span>
+                                    </button>
+                                </div>
+                            )}
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                multiple
+n                                style={{ display: 'none' }}
+                                onChange={(e) => {
+                                    const files = Array.from(e.target.files || []);
+                                    if (files.length === 0) return;
+                                    const fileEntries = files.map(file => ({
+                                        file,
+                                        preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
+                                    }));
+                                    setDroppedFiles(prev => [...prev, ...fileEntries]);
+                                    e.target.value = '';
+                                }}
+                            />
+                        </div>
                         <textarea
                             ref={textareaRef}
                             className="afp-textarea"
                             value={input}
-                            placeholder={t.inputPlaceholder}
+                            placeholder={droppedFiles.length > 0 ? (t.droppedFilesPlaceholder || 'Add a message or press Enter to send') : selectedDocs.length > 0 ? (t.docPickerAddedToChat || 'Document selected — type your question or press Enter') : t.inputPlaceholder}
                             rows={1}
                             onChange={handleTextareaChange}
                             onKeyDown={handleKey}
@@ -370,12 +723,22 @@ export default function ChatbotFullpage() {
                         <button
                             className="afp-send-btn"
                             onClick={handleSend}
-                            disabled={busy || !input.trim()}
+                            disabled={busy || (!input.trim() && selectedDocs.length === 0 && droppedFiles.length === 0)}
                             title={t.sendButton}
                         >➤</button>
                     </div>
                     <div className="afp-input-hint">{t.inputHint}</div>
                 </div>
+
+                {/* Document Picker Modal */}
+                {showDocPicker && (
+                    <DocumentPicker
+                        cfg={cfg}
+                        t={t}
+                        onSelect={handleDocPickerSelect}
+                        onClose={() => setShowDocPicker(false)}
+                    />
+                )}
 
                 {/* Config overlay */}
                 {showConfig && (

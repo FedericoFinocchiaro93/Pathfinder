@@ -25,9 +25,17 @@ export function buildSystemPrompt(cfg) {
 const TOOL_RULES = (siteId, t) => {
     const p = t.prompt;
     // Collect all rule* keys dynamically — works regardless of how many rules exist
+    // Matches rule1, rule2, rule7b, rule7c, etc.
     const rules = Object.keys(p)
-        .filter(k => /^rule\d+$/.test(k))
-        .sort((a, b) => parseInt(a.slice(4)) - parseInt(b.slice(4)))
+        .filter(k => /^rule\d+[a-z]?$/.test(k))
+        .sort((a, b) => {
+            const numA = parseInt(a.match(/\d+/)[0]);
+            const numB = parseInt(b.match(/\d+/)[0]);
+            if (numA !== numB) return numA - numB;
+            const subA = (a.match(/[a-z]$/) || [''])[0];
+            const subB = (b.match(/[a-z]$/) || [''])[0];
+            return subA.localeCompare(subB);
+        })
         .map(k => p[k].replace(/\$\{siteId\}/g, siteId));
     return `FUNDAMENTAL TOOL RULES:\n${rules.join('\n\n')}`;
 };

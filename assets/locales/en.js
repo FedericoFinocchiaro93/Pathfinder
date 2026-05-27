@@ -68,6 +68,36 @@ export default {
     sendButton: 'Send (Enter)',
     inputHint: 'Press Enter to send · Shift+Enter for new line',
 
+    // ── Document Picker ──
+    docPickerTitle: '📎 Select Documents',
+    docPickerClose: 'Close',
+    docPickerSearch: 'Search documents…',
+    docPickerClearSearch: 'Clear search',
+    docPickerRoot: 'Root',
+    docPickerGridView: 'Grid view',
+    docPickerListView: 'List view',
+    docPickerDocuments: 'documents',
+    docPickerLoading: 'Loading…',
+    docPickerNoResults: 'No documents found',
+    docPickerEmpty: 'This folder is empty',
+    docPickerLoadMore: 'Load more…',
+    docPickerDocumentSelected: 'document selected',
+    docPickerDocumentsSelected: 'documents selected',
+    docPickerSelect: 'Select',
+    docPickerDeselect: 'Deselect',
+    docPickerConfirm: '✓ Add to chat',
+    docPickerAttachBtn: 'Attach document',
+    attachFromDML: 'Upload from DML',
+    attachFromComputer: 'Upload from computer',
+    docPickerExtracting: 'Extracting content from document…',
+    docPickerExtractError: 'Error extracting document content',
+    docPickerAddedToChat: 'Document added to chat',
+
+    // ── Drag & Drop ──
+    dropFilesHere: 'Drop files here to attach',
+    droppedFilesPlaceholder: 'Add a message or press Enter to send',
+    uploadingDocument: 'Uploading document…',
+
     // ── Chips ──
     chips: [
         { icon: '🔍', text: 'How many web contents are in the portal?' },
@@ -104,6 +134,9 @@ export default {
     listingObjectEntryFolders: 'Listing Object Entry folders…',
     updatingContentFolder: 'Updating content folder "{query}"…',
     updatingObjectEntryFolder: 'Updating Object Entry folder "{query}"…',
+    pickingDocument: 'Retrieving document "{query}"…',
+    listingDocumentFolders: 'Listing document folders…',
+    listingFolderDocuments: 'Listing documents in folder "{query}"…',
 
     // ── Config Panel ──
     configTitle: '⚙ Settings',
@@ -313,6 +346,34 @@ SC3. STRUCTURE LIMITATIONS:
   - date/date_time require ISO-8601 format with timezone (e.g. "2025-01-15T00:00:00Z")
   - geolocation: use value_geo with {latitude, longitude}
   - document_library/image: use value_document_id with the document ID`,
+
+        rule7b: `━━━ ATTACHED DOCUMENTS ━━━
+When the user attaches documents from the Document Library, you receive information like:
+[Image: astronaut.png] (ID: 34064, MIME: image/png, Size: 23 KB) — URL: http://...
+[Document: report.pdf] (ID: 12345, MIME: application/pdf, Size: 1.2 MB) — URL: http://...
+
+IMPORTANT: When the user asks to use an attached document (e.g., "use this image in the content"):
+1. For image and document_library fields in create_structured_content, use the document ID as value_document_id
+   Example: fields: [{ name: "image", value_document_id: 34064 }]
+2. The ID is indicated as "ID: XXXXX" in the attached document context
+3. Do NOT use the document URL — ALWAYS use the numeric ID as value_document_id`,
+
+        rule7c: `━━━ UPLOADED FILES (DRAG & DROP) ━━━
+When the user drags and drops files into the chat, you receive file information like:
+- File 0: "photo.png" (image/png, 132 KB)
+
+The files are stored temporarily and can be uploaded to the Document Library using the upload_document tool.
+
+IMPORTANT RULES:
+1. Do NOT automatically upload files — only upload when the user EXPLICITLY asks to:
+   - "Upload this image to the Document Library"
+   - "Save this file"
+   - "Use this image in a web content" (requires upload first)
+2. When the user asks to use a dropped image in a web content:
+   a. First call upload_document to upload the file to the Document Library
+   b. Then use the returned document ID as value_document_id in create_structured_content
+3. The file_index parameter in upload_document is 0-based (0 = first file, 1 = second, etc.)
+4. After uploading, you will receive the document ID which can be used with value_document_id`,
 
         rule8: `━━━ KNOWN LIFERAY API LIMITATIONS ━━━
 L1. ORGANIZATIONS AND USER GROUPS: Headless APIs do NOT support assigning a user to an organization or user group. If requested, explain it's not possible via API and suggest Control Panel → Users → Edit User → Organizations / User Groups.

@@ -114,6 +114,16 @@ function buildSearchingMessage(userText) {
         { re: /\brename\s+(?:the\s+)?(?:object\s+entry\s+)?folder\s+(.+)/i, tmpl: (m) => t.updatingObjectEntryFolder.replace('{query}', m[1].trim()) },
         { re: /\bupdate\s+(?:the\s+)?(?:content\s+)?folder\s+(.+)/i, tmpl: (m) => t.updatingContentFolder.replace('{query}', m[1].trim()) },
         { re: /\bupdate\s+(?:the\s+)?(?:object\s+entry\s+)?folder\s+(.+)/i, tmpl: (m) => t.updatingObjectEntryFolder.replace('{query}', m[1].trim()) },
+        // ── Document picker / folders ──
+        { re: /\b(?:recupera|mostra|leggi|apri)\s+(?:il\s+)?documento\s+(.+)/i, tmpl: (m) => t.pickingDocument.replace('{query}', m[1].trim()) },
+        { re: /\b(?:elenca|mostra|lista)\s+(?:le\s+)?cartelle\s+(?:dei\s+)?document/i, tmpl: () => t.listingDocumentFolders },
+        { re: /\b(?:elenca|mostra|lista)\s+(?:i\s+)?documenti\s+(?:nella\s+)?cartella\s+(.+)/i, tmpl: (m) => t.listingFolderDocuments.replace('{query}', m[1].trim()) },
+        { re: /\b(?:pick|retrieve|get|open|read|fetch)\s+(?:the\s+)?document\s+(.+)/i, tmpl: (m) => t.pickingDocument.replace('{query}', m[1].trim()) },
+        { re: /\b(?:list|show)\s+(?:the\s+)?document\s+folders/i, tmpl: () => t.listingDocumentFolders },
+        { re: /\b(?:list|show)\s+(?:the\s+)?documents\s+(?:in\s+)?(?:folder|cartella)\s+(.+)/i, tmpl: (m) => t.listingFolderDocuments.replace('{query}', m[1].trim()) },
+        // ── Upload document ──
+        { re: /\b(?:carica|upload|salva)\s+(?:il\s+)?(?:file|documento|immagine)/i, tmpl: () => t.uploadingDocument || 'Uploading document…' },
+        { re: /\b(?:upload|save|store)\s+(?:the\s+)?(?:file|document|image)/i, tmpl: () => t.uploadingDocument || 'Uploading document…' },
     ];
 
     for (const { re, tmpl } of patterns) {
@@ -164,7 +174,7 @@ export function useAgentFP({ cfg, history, setHistory, setMessages }) {
         return appendAssistantToHistory(currentHistory, makeAssistantResponse(p, text), p);
     }, [removeSearchingMsg, setMessages]);
 
-    const runAgent = useCallback(async (userText, externalSetBusy) => {
+    const runAgent = useCallback(async (userText, externalSetBusy, displayText) => {
         if (busyRef.current) return;
 
         const base = getBaseUrl(cfg.liferayUrl);
@@ -192,7 +202,13 @@ export function useAgentFP({ cfg, history, setHistory, setMessages }) {
         busyRef.current = true;
         externalSetBusy(true);
 
-        addMsg('user', userText);
+        // If displayText is provided, show that in the chat instead of the full LLM text
+        // (useful for document attachments where we don't want to show extracted content)
+        // If displayText is null, skip adding the user message (caller handles it)
+        if (displayText !== null) {
+            const chatText = displayText || userText;
+            addMsg('user', chatText);
+        }
         addThinking();
 
         let currentHistory = appendUserMessage(history, userText, p);

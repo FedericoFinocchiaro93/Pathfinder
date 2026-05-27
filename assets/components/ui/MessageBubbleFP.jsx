@@ -57,6 +57,39 @@ function SearchingBubble({ text }) {
 
 const AVATAR = { user: '👤', assistant: null, system: '⚙' };
 
+function formatDocSize(bytes) {
+    if (!bytes) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function getFileIcon(fileName) {
+    if (!fileName) return '📎';
+    const ext = fileName.split('.').pop().toLowerCase();
+    const icons = { pdf: '📄', doc: '📝', docx: '📝', xls: '📊', xlsx: '📊', ppt: '📊', pptx: '📊', txt: '📃', csv: '📊', jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️', svg: '🖼️', webp: '🖼️', mp4: '🎬', mp3: '🎵', zip: '📦' };
+    return icons[ext] || '📎';
+}
+
+function DocPreview({ doc }) {
+    const base = (window.Liferay?.ThemeDisplay?.getCDNHost?.() || '') + (window.Liferay?.ThemeDisplay?.getPathContext?.() || '');
+    const thumb = doc.adaptedImages?.find(img => img.resolution <= 300) || doc.adaptedImages?.[0];
+    const thumbUrl = thumb?.contentUrl ? (thumb.contentUrl.startsWith('http') ? thumb.contentUrl : base + thumb.contentUrl) : null;
+    const isImage = doc.mimeType?.startsWith('image/');
+
+    return (
+        <div className="afp-doc-preview" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(0,0,0,0.04)', borderRadius: 8, padding: '4px 10px', margin: '2px 0', maxWidth: '100%' }}>
+            {thumbUrl ? (
+                <img src={thumbUrl} alt="" style={{ width: 28, height: 28, borderRadius: 4, objectFit: 'cover' }} />
+            ) : (
+                <span style={{ fontSize: 18 }}>{getFileIcon(doc.fileName)}</span>
+            )}
+            <span style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>{doc.title}</span>
+            {doc.size ? <span style={{ fontSize: 11, color: '#888' }}>{formatDocSize(doc.size)}</span> : null}
+        </div>
+    );
+}
+
 function MessageBubbleFP({ msg, onRegenerate }) {
     const t = getDictionary();
     if (msg.type === 'thinking')  return <ThinkingBubble />;
@@ -68,6 +101,28 @@ function MessageBubbleFP({ msg, onRegenerate }) {
         <div className={`afp-msg afp-${msg.role}`}>
             <div className="afp-msg-avatar">{msg.role === 'assistant' ? <img src={botIcon} alt="" /> : (AVATAR[msg.role] || '⚙')}</div>
             <div className="afp-msg-body">
+                {msg.docs && msg.docs.length > 0 && (
+                    <div className="afp-doc-previews" style={{ marginBottom: 6 }}>
+                        {msg.docs.map(doc => (
+                            <DocPreview key={doc.id} doc={doc} />
+                        ))}
+                    </div>
+                )}
+                {msg.droppedFiles && msg.droppedFiles.length > 0 && (
+                    <div className="afp-doc-previews" style={{ marginBottom: 6 }}>
+                        {msg.droppedFiles.map((f, i) => (
+                            <div key={i} className="afp-doc-preview" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(0,0,0,0.04)', borderRadius: 8, padding: '4px 10px', margin: '2px 0', maxWidth: '100%' }}>
+                                {f.preview ? (
+                                    <img src={f.preview} alt="" style={{ width: 28, height: 28, borderRadius: 4, objectFit: 'cover' }} />
+                                ) : (
+                                    <span style={{ fontSize: 18 }}>{getFileIcon(f.name)}</span>
+                                )}
+                                <span style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>{f.name}</span>
+                                {f.size ? <span style={{ fontSize: 11, color: '#888' }}>{formatDocSize(f.size)}</span> : null}
+                            </div>
+                        ))}
+                    </div>
+                )}
                 {msg.text && (
                     <div className="afp-bubble">{renderContent(msg.text)}</div>
                 )}

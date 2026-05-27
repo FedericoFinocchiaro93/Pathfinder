@@ -194,4 +194,47 @@ export async function liferayDelete(baseUrl, path, user, pass) {
     return res.json().catch(() => ({ deleted: true }));
 }
 
+/**
+ * Upload a file to Liferay Document Library via Headless Delivery API.
+ * @param {string} baseUrl - Liferay base URL
+ * @param {string} siteId - Site ID
+ * @param {File|Blob} file - The file to upload
+ * @param {string} fileName - The file name
+ * @param {string} title - Optional document title
+ * @param {number} folderId - Optional parent folder ID (0 = root)
+ * @param {string} user - Username
+ * @param {string} pass - Password
+ * @returns {Promise<Object>} The created document object
+ */
+export async function liferayUploadDocument(baseUrl, siteId, file, fileName, title, folderId, user, pass) {
+    const url = folderId
+        ? `${baseUrl}/o/headless-delivery/v1.0/document-folders/${folderId}/documents`
+        : `${baseUrl}/o/headless-delivery/v1.0/sites/${siteId}/documents`;
+
+    const formData = new FormData();
+    formData.append('file', file, fileName || file.name || 'upload');
+
+    if (title) {
+        formData.append('document', JSON.stringify({ title }));
+    } else if (fileName) {
+        formData.append('document', JSON.stringify({ title: fileName }));
+    }
+
+    const headers = {};
+    if (user && pass) {
+        headers['Authorization'] = 'Basic ' + btoa(user + ':' + pass);
+    } else {
+        const token = getLiferayToken();
+        if (token) headers['x-csrf-token'] = token;
+    }
+
+    dbg('UPLOAD', url, fileName);
+    const res = await fetch(url, { method: 'POST', headers, body: formData, credentials: 'same-origin' });
+    if (!res.ok) {
+        const bodyText = await res.text().catch(() => '');
+        throw new Error(`Upload failed: HTTP ${res.status} ${res.statusText} — ${bodyText.substring(0, 300)}`);
+    }
+    return res.json();
+}
+
 export { ENRICH_FRIENDLY_LIMIT, getCachedResponse, setCachedResponse };
