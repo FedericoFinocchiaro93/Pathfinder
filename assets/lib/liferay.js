@@ -237,4 +237,48 @@ export async function liferayUploadDocument(baseUrl, siteId, file, fileName, tit
     return res.json();
 }
 
+/**
+ * Find a document folder by name under a parent folder (or site root).
+ * Returns the folder object or null if not found.
+ */
+export async function liferayFindFolderByName(baseUrl, siteId, folderName, parentFolderId, user, pass) {
+    const path = parentFolderId
+        ? `/o/headless-delivery/v1.0/document-folders/${parentFolderId}/document-folders`
+        : `/o/headless-delivery/v1.0/sites/${siteId}/document-folders`;
+    try {
+        const result = await liferayGet(baseUrl, path, user, pass);
+        const items = result?.items || [];
+        const found = items.find(f => f.name === folderName);
+        return found || null;
+    } catch (e) {
+        dbg('FindFolder error:', e.message);
+        return null;
+    }
+}
+
+/**
+ * Create a document folder in the Document Library.
+ * Returns the created folder object.
+ */
+export async function liferayCreateFolder(baseUrl, siteId, folderName, parentFolderId, user, pass) {
+    const path = parentFolderId
+        ? `/o/headless-delivery/v1.0/document-folders/${parentFolderId}/document-folders`
+        : `/o/headless-delivery/v1.0/sites/${siteId}/document-folders`;
+    const body = { name: folderName };
+    return liferayPost(baseUrl, path, body, user, pass);
+}
+
+/**
+ * Ensure a document folder exists: find it or create it.
+ * Returns the folder object with id.
+ */
+export async function liferayEnsureFolder(baseUrl, siteId, folderName, parentFolderId, user, pass) {
+    // Try to find existing
+    const existing = await liferayFindFolderByName(baseUrl, siteId, folderName, parentFolderId, user, pass);
+    if (existing) return existing;
+
+    // Create it
+    return liferayCreateFolder(baseUrl, siteId, folderName, parentFolderId, user, pass);
+}
+
 export { ENRICH_FRIENDLY_LIMIT, getCachedResponse, setCachedResponse };

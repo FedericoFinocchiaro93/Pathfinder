@@ -135,6 +135,27 @@ export function useAgent({ cfg, history, setHistory, setMessages, open, setUnrea
 
         let currentHistory = appendUserMessage(history, userText, p);
 
+        // ── Batch progress tracking ──
+        const BATCH_CREATE_TOOLS = new Set([
+            'create_content_structure', 'create_object', 'create_vocabulary',
+            'create_category', 'create_site_page', 'create_role', 'create_user',
+            'assign_role_to_user', 'create_keyword',
+        ]);
+        const BATCH_ENTITY_LABELS = {
+            create_content_structure: 'structure',
+            create_object: 'object',
+            create_vocabulary: 'vocabulary',
+            create_category: 'category',
+            create_site_page: 'page',
+            create_role: 'role',
+            create_user: 'user',
+            assign_role_to_user: 'role-assignment',
+            create_keyword: 'keyword',
+        };
+        const batchCounters = {};
+        const batchErrors   = {};
+        let lastBatchProgressType = null;
+
         try {
             let iterations = 0;
             while (iterations < MAX_ITERATIONS) {
@@ -144,8 +165,34 @@ export function useAgent({ cfg, history, setHistory, setMessages, open, setUnrea
 
                 if (response.stop_reason === 'end_turn') {
                     removeThinking(); removeSearchingMsg();
+
+                    // ── Batch progress detection ──
+                    const batchProgressPattern = /[✅🎉].*\b(prosegu|proceed|continu|next|creating|creando|creazi|batch|struttur|vocabolar|categor|pagin|ruol|utent|object|structure)\b/i;
+                    const isBatchProgress = batchProgressPattern.test(response.text || '');
+
+                    // ── Batch final summary ──
+                    const batchTypes = Object.keys(batchCounters);
+                    if (batchTypes.length > 0) {
+                        const summaryParts = batchTypes.map((type) => {
+                            const c = batchCounters[type];
+                            const e = batchErrors[type] || 0;
+                            return e > 0 ? `${c} ${type}s (⚠ ${e} errors)` : `${c} ${type}`;
+                        });
+                        const summaryMsg = `🎉 Batch complete! Created: ${summaryParts.join(', ')}`;
+                        setMessages((prev) => [...prev, { id: Date.now() + Math.random(), role: 'assistant', text: summaryMsg, sourceQuery: userText }]);
+                    }
+
                     setMessages((prev) => [...prev, { id: Date.now() + Math.random(), role: 'assistant', text: response.text, sourceQuery: userText }]);
                     currentHistory = appendAssistantToHistory(currentHistory, response, p);
+
+                    if (isBatchProgress && iterations < MAX_ITERATIONS) {
+                        dbg('[Agent] Batch progress detected, continuing loop...');
+                        addThinking();
+                        const continuePrompt = 'Continue with the next step of the batch. Do not repeat what you already said. Just proceed with the next creation.';
+                        currentHistory = appendUserMessage(currentHistory, continuePrompt, p);
+                        continue;
+                    }
+
                     if (!open) setUnread((n) => n + 1);
                     break;
                 }
@@ -169,15 +216,17 @@ export function useAgent({ cfg, history, setHistory, setMessages, open, setUnrea
                         break;
                     }
 
-                    const INTERMEDIATE_TOOLS = new Set(['get_categories','get_content_structures','get_taxonomy_categories_by_ids','get_tags','get_available_languages','list_available_apis','get_api_spec','find_relevant_endpoints','discover_endpoint','count_content_by_month']);
+                    const INTERMEDIATE_TOOLS = new Set(['get_categories','get_content_structures','get_taxonomy_categories_by_ids','get_tags','get_available_languages','list_available_apis','get_api_spec','find_relevant_endpoints','discover_endpoint','count_content_by_month','search_pages','get_available_roles','get_vocabularies','get_users','get_custom_objects','get_navigation_menus','get_user_spaces','get_content_structure_fields']);
                     const lastToolName = toolUseBlocks[toolUseBlocks.length - 1]?.name;
                     const isIntermediateTool = INTERMEDIATE_TOOLS.has(lastToolName);
+                    const isBatchActive = Object.keys(batchCounters).length > 0;
                     const isAggregativeIntent = /\b(mese|mesi|anno|quanti per|distribuzione|pi[uù] contenut|pi[uù] pubblicat|aggreg)\b/i.test(userText);
                     const wantsListIntent = !isAggregativeIntent && /\b(titolo|titoli|elenca|mostra|mostrami|listare|lista|contenuti|trova|trovami|cerca|cercami)\b/i.test(userText);
                     const allItems = toolResults.flatMap((tr) => tr.content?.items || []);
                     const totalCount = toolResults[0]?.content?.totalCount ?? allItems.length;
 
-                    if (!isIntermediateTool && wantsListIntent && allItems.length > 0) {
+                    // During an active batch, NEVER interrupt to show search results
+                    if (!isIntermediateTool && wantsListIntent && allItems.length > 0 && !isBatchActive) {
                         const { text, hasMore, nextOffset } = formatItemsPage(allItems, totalCount, 0, base);
                         currentHistory = emitAssistant(text, currentHistory, p, userText);
                         if (hasMore) { paginationRef.current = { items: allItems, totalCount, offset: nextOffset, toolUseBlocks, toolResults, sourceQuery: userText, history: currentHistory }; }
@@ -186,6 +235,31 @@ export function useAgent({ cfg, history, setHistory, setMessages, open, setUnrea
                     }
 
                     currentHistory = appendToolResultsToHistory(currentHistory, toolUseBlocks, toolResults, p);
+
+                    // ── Batch progress: track creation tools silently, emit message only when entity type changes ──
+                    for (let i = 0; i < toolUseBlocks.length; i++) {
+                        const tb = toolUseBlocks[i];
+                        const entityLabel = BATCH_ENTITY_LABELS[tb.name];
+                        if (!entityLabel) continue;
+
+                        const result = toolResults[i]?.content;
+                        const isError = result?.error;
+                        batchCounters[entityLabel] = (batchCounters[entityLabel] || 0) + 1;
+                        if (isError) batchErrors[entityLabel] = (batchErrors[entityLabel] || 0) + 1;
+
+                        // When entity type changes, emit a completion summary for the PREVIOUS type
+                        if (lastBatchProgressType && lastBatchProgressType !== entityLabel) {
+                            const prevCount = batchCounters[lastBatchProgressType] || 0;
+                            const prevErr = batchErrors[lastBatchProgressType] || 0;
+                            const prevSummary = prevErr > 0
+                                ? `${prevCount - prevErr} of ${prevCount} (⚠ ${prevErr} errors)`
+                                : `${prevCount}`;
+                            const transitionMsg = `✅ All ${lastBatchProgressType}s done — proceeding with ${entityLabel}s…`;
+                            setMessages((prev) => [...prev, { id: Date.now() + Math.random(), role: 'assistant', text: transitionMsg, sourceQuery: userText }]);
+                        }
+                        lastBatchProgressType = entityLabel;
+                    }
+
                     addThinking();
                     continue;
                 }

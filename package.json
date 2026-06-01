@@ -9,7 +9,8 @@
     },
     "dependencies": {
         "react": "^18.2.0",
-        "react-dom": "^18.2.0"
+        "react-dom": "^18.2.0",
+        "xlsx": "^0.18.5"
     },
     "devDependencies": {
         "@babel/core": "^7.26.0",
@@ -17,10 +18,10 @@
         "@babel/preset-react": "^7.26.3",
         "babel-loader": "^9.2.1",
         "css-loader": "6.10.0",
+        "http-server": "^14.1.1",
         "style-loader": "3.3.4",
         "webpack": "5.90.1",
         "webpack-cli": "5.1.4",
-        "webpack-dev-server": "^4.11.1",
-        "http-server": "^14.1.1"
+        "webpack-dev-server": "^4.11.1"
     }
 }

@@ -68,7 +68,7 @@ This is where Pathfinder AI truly shines. Every CRUD operation across your Lifer
 - **Mandatory privacy consent screen** on first access — no chat until the user accepts
 - **Full EULA** always accessible from the settings panel
 - **Liferay credentials stay in the browser** — never transmitted to third parties
-- **11 behavioral rule blocks** injected at runtime into the system prompt — covering communication, data integrity, multi-step flows, entity handling, and known API limitations
+- **11 behavioral rule blocks** injected at runtime into the system prompt — covering communication, data integrity, multi-step flows, entity handling, Excel file handling, and known API limitations
 - **No telemetry** — zero data sent to external servers
 
 ---
@@ -233,7 +233,7 @@ Updated pricing for all providers: Anthropic, Gemini, OpenAI, DeepSeek, Mistral.
 - **Local credentials** — Liferay email and password stay in the browser, transmitted only to the portal
 - **Local API keys** — LLM provider keys are stored in localStorage
 - **No telemetry** — zero data sent to third-party servers
-- **LLM rules** — 11 behavioral rule blocks injected at runtime, preventing the AI from exposing technical details, inventing data, or bypassing operational constraints
+- **LLM rules** — 12 behavioral rule blocks injected at runtime, preventing the AI from exposing technical details, inventing data, or bypassing operational constraints
 
 ---
 

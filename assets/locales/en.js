@@ -12,7 +12,97 @@ export default {
     railRecentConversations: 'Recent conversations',
     railSettings: 'Settings',
     railUsage: 'LLM Usage',
+    railContentStats: 'Content Analytics',
     usageTitle: 'LLM Usage',
+
+    // ── Content Stats ──
+    statsTitle: 'Content Analytics',
+    statsTabContents: 'Contents',
+    statsTabOverview: 'Overview',
+    statsTabStructures: 'Structures',
+    statsTabDocuments: 'Documents',
+    statsTabPages: 'Pages',
+    statsTabAuthors: 'Authors',
+    statsTabVocabularies: 'Vocabularies',
+    statsArticles: 'Articles',
+    statsDocuments: 'Documents',
+    statsPages: 'Pages',
+    statsObjects: 'Objects',
+    statsVocabularies: 'Vocabularies',
+    statsCategories: 'Categories',
+    statsLoading: 'Loading statistics…',
+    statsRetry: 'Retry',
+    statsNoData: 'No data available',
+    statsRefresh: 'Refresh',
+    statsLastRefresh: 'Last refresh',
+    statsTopStructures: 'Top Structures',
+    statsTopDocTypes: 'Top Document Types',
+    statsContentDistribution: 'Content Distribution',
+    statsArticlesByStructure: 'Articles by Content Structure',
+    statsDocsByType: 'Documents by Type',
+    statsDocsByFolder: 'Documents by Folder',
+    statsPagesByType: 'Pages by Type',
+    statsTopAuthors: 'Top Authors',
+    statsVocabCategories: 'Vocabularies & Categories',
+    statsTotalStructures: 'Total structures',
+    statsTotalArticles: 'total articles',
+    statsTotalSize: 'Total size',
+    statsTotalAuthors: 'Total authors',
+    statsTotalVocabs: 'Total vocabularies',
+    statsTotalCategories: 'total categories',
+    statsColTitle: 'Title',
+    statsColAuthor: 'Author',
+    statsColDate: 'Date',
+    statsColStatus: 'Status',
+    statsTabWorkflow: 'Status',
+    statsTabFreshness: 'Freshness',
+    statsTabTimeline: 'Timeline',
+    statsTabHealth: 'Health',
+    statsWorkflowTitle: 'Publication Status',
+    statsWorkflowDesc: 'Content items by publication status (derived from datePublished)',
+    statsFreshnessTitle: 'Content Freshness',
+    statsFreshnessDesc: 'How recently content was last modified',
+    statsTimelineTitle: 'Content Timeline (Last 12 Months)',
+    statsTimelineDesc: 'Monthly content creation and modification activity',
+    statsHealthTitle: 'Content Health Score',
+    statsHealthDesc: 'Composite score based on categorization, tagging, structure, and freshness',
+    statsTimelineCreated: 'Created',
+    statsTimelineModified: 'Modified',
+    statsHealthNoCategories: 'Without Categories',
+    statsHealthNoKeywords: 'Without Tags',
+    statsHealthStale: 'Stale (>90 days)',
+    statsHealthTotal: 'Total articles',
+
+    // ── Page Types ──
+    pageTypeContent: 'Content Page',
+    pageTypeWidget: 'Widget Page',
+    pageTypeLink: 'Link Page',
+    pageTypeUrl: 'URL Page',
+    pageTypeEmbedded: 'Embedded Page',
+    pageTypeNode: 'Node Page',
+    pageTypeFull: 'Full Page',
+    pageTypeUnknown: 'Unknown',
+    statsColCategory: 'Category',
+    statsColUsage: 'Usage Count',
+    statsVocabClickHint: 'Click a vocabulary to see its categories',
+    statsPageStatusTitle: 'Page Status',
+    statsPageFreshnessTitle: 'Page Freshness',
+    statsPageTimelineTitle: 'Page Timeline (Last 12 Months)',
+    statsPageHealthTitle: 'Page Health Score',
+    statsPageNoDescription: 'Without Description',
+    statsPageHidden: 'Hidden from Nav',
+    statsPageStale: 'Stale (>90 days)',
+    statsPageAuthors: 'Pages by Author',
+    statsPageHierarchy: 'Site Hierarchy',
+    statsTotalPages: 'total pages',
+    statsRootPages: 'Root Pages',
+    statsMaxDepth: 'Max Depth',
+    statsTotalTypes: 'types',
+    statsColReviewDate: 'Review Date',
+    statsColType: 'Type',
+    statsViewPage: 'View',
+    statsHealthNoReviewDate: 'No Review Date',
+    statsExportCSV: 'Export CSV',
     usageTabSession: 'Session',
     usageTabAllTime: 'All Time',
     usageTotalCalls: 'Calls',
@@ -97,6 +187,22 @@ export default {
     dropFilesHere: 'Drop files here to attach',
     droppedFilesPlaceholder: 'Add a message or press Enter to send',
     uploadingDocument: 'Uploading document…',
+    excelParsed: 'Excel data extracted',
+    excelParseError: 'Error parsing Excel file',
+    excelAttachedSingle: 'The user attached the following Excel file:',
+    excelAttachedMultiple: 'The user attached the following Excel files:',
+    excelSheetLabel: 'Sheet',
+    excelDataHint: 'The data above was automatically extracted from the Excel file. Analyze it and respond to the user\'s requests. If the user asks to create structures, objects, pages or content based on this data, proceed in sequence creating each entity one at a time. For pages with hierarchy (PaginaPadre column), create parent pages first, then children.',
+    excelAnalyzeHint: 'Analyze this data and respond to the user\'s questions.',
+    templateGenerated: 'Excel template generated and uploaded successfully!',
+    templateError: 'Error generating Excel template',
+
+    // ── Batch Progress ──
+    batchTransition: '✅ {count} {type}s created — proceeding with {nextType}s…',
+    batchTransitionWithErrors: '✅ {success} of {total} {type}s created (⚠ {errors} errors) — proceeding with {nextType}s…',
+    batchComplete: '🎉 Batch complete! Created: {summary}',
+    batchCompleteWithErrors: '🎉 Batch complete! Created: {summary} (⚠ {errors} total errors)',
+    batchContinuePrompt: 'Continue with the next step of the batch. Do not repeat what you already said. Just proceed with the next creation.',
 
     // ── Chips ──
     chips: [
@@ -119,6 +225,30 @@ export default {
 
     // ── Tool Call Bubble ──
     toolResults: 'results',
+
+    // ── Import Progress ──
+    importProgress: 'Import',
+    importingFile: 'Importing {file}',
+    importing: 'Importing…',
+    importCompleted: '✅ Import completed',
+    importError: '❌ Error during import',
+    importRecords: 'records',
+    importRow: 'Row',
+    importErrors: 'Errors',
+    importSummary: 'Summary',
+    importSuccesses: 'Completed operations',
+
+    // ── Batch Entity Labels ──
+    batchStructure: 'Structures',
+    batchObject: 'Objects',
+    batchVocabulary: 'Vocabularies',
+    batchCategory: 'Categories',
+    batchPage: 'Pages',
+    batchRole: 'Roles',
+    batchUser: 'Users',
+    batchRoleAssignment: 'Assignments',
+    batchCreating: 'Creating {type}…',
+    batchErrorIn: 'Error in {type}',
 
     // ── Searching Messages ──
     searchingContentStructure: 'Searching web content for structure "{query}"…',
@@ -356,7 +486,12 @@ IMPORTANT: When the user asks to use an attached document (e.g., "use this image
 1. For image and document_library fields in create_structured_content, use the document ID as value_document_id
    Example: fields: [{ name: "image", value_document_id: 34064 }]
 2. The ID is indicated as "ID: XXXXX" in the attached document context
-3. Do NOT use the document URL — ALWAYS use the numeric ID as value_document_id`,
+3. Do NOT use the document URL — ALWAYS use the numeric ID as value_document_id
+
+EXCEL FILES FROM DOCUMENT LIBRARY:
+If the user wants to read or analyze an Excel file (.xlsx, .xls, .csv) from the Document Library, use the pick_document tool.
+The tool will automatically download and parse the Excel file, returning all sheets with their data in a structured, readable format.
+You can then analyze the data, answer questions, or use it for batch creation (following the same rules as drag-and-drop Excel files).`,
 
         rule7c: `━━━ UPLOADED FILES (DRAG & DROP) ━━━
 When the user drags and drops files into the chat, you receive file information like:
@@ -374,6 +509,126 @@ IMPORTANT RULES:
    b. Then use the returned document ID as value_document_id in create_structured_content
 3. The file_index parameter in upload_document is 0-based (0 = first file, 1 = second, etc.)
 4. After uploading, you will receive the document ID which can be used with value_document_id`,
+
+        rule7d: `━━━ EXCEL FILES ━━━
+When the user drags an Excel file (.xlsx, .xls, .csv), the data is automatically extracted and presented in tabular format.
+
+IMPORTANT RULES:
+1. Analyze the file data and answer the user's questions
+2. If the user asks to create structures, objects, or content based on the Excel data:
+   - Create each entity ONE AT A TIME, in sequence
+   - If a column doesn't match a valid field type, ask for clarification
+3. Column names in the Excel sheet map directly to field names
+4. If the sheet has a standard format with StructureName/Field/Type columns, create DDM structures with the specified fields
+5. If the format is non-standard, interpret the data and ask for confirmation before proceeding
+
+BATCH PROGRESS MESSAGES (CRITICAL):
+When processing an Excel file with multiple sheets, you MUST provide progress messages between each logical group WITHOUT stopping the flow:
+- After completing ALL entities of one type (e.g. all vocabularies, all categories in a vocabulary, all fields of a structure), output a brief completion message like:
+  ✅ Vocabularies created: 3/3 — proceeding with categories...
+  ✅ Structure "Article" created with 7 fields — proceeding with next structure...
+  ✅ All structures created (5/5) — proceeding with objects...
+  ✅ All pages created (8/8) — proceeding with roles...
+  ✅ All roles created (4/4) — proceeding with users...
+- These messages MUST NOT stop the creation flow. Always continue with the next group immediately.
+- The pattern is: complete a group → brief summary → continue with next group.
+- At the very end, provide a final summary of everything that was created.
+- If an entity creation fails, note the error briefly and CONTINUE with the next entity. Do NOT stop the entire process.
+- Example flow for a file with Structures, Vocabularies, and Pages sheets:
+  1. Start creating structures → "✅ Structure \"Article\" created with 7 fields"
+  2. Continue → "✅ Structure \"Product\" created with 9 fields"
+  3. All structures done → "✅ All structures created (5/5) — proceeding with vocabularies..."
+  4. Create vocabularies → "✅ Vocabulary \"Topics\" created"
+  5. Create categories → "✅ Categories for \"Topics\" created (7/7)"
+  6. All vocabularies done → "✅ All vocabularies and categories created — proceeding with pages..."
+  7. Create pages → "✅ Page \"Home\" created"
+  8. Final summary → "🎉 Batch complete! Created: 5 structures, 5 vocabularies with 22 categories, 12 pages"
+
+SHEET PROCESSING ORDER (MANDATORY):
+When processing an Excel file with multiple sheets, you MUST follow THIS EXACT ORDER, sheet by sheet, row by row:
+1. Strutture / Structures — create ALL DDM structures (each structure with all its fields)
+2. Oggetti / Objects — create ALL Object Definitions (each object with all its fields)
+3. Vocabolari / Vocabularies — create ALL vocabularies, THEN ALL categories (in sheet order: vocabulary first, then its categories)
+4. Pagine / Pages — create ALL pages in hierarchical order (root pages first, then children)
+5. Ruoli / Roles — create ALL roles
+6. Utenti / Users — create ALL users and assign roles
+
+SHEET NAME MAPPING (Italian → English):
+- Strutture = Structures
+- Oggetti = Objects
+- Vocabolari = Vocabularies
+- Pagine = Pages
+- Ruoli = Roles
+- Utenti = Users
+The Excel file may use either Italian or English sheet names. Match them accordingly.
+
+FUNDAMENTAL ORDERING RULES:
+- Process ONE SHEET AT A TIME, from start to finish, in the order above.
+- Within each sheet, process rows IN THE ORDER THEY APPEAR in the sheet.
+- Do NOT jump from one sheet to another randomly. Complete one sheet before moving to the next.
+- Do NOT mix creations from different sheets (e.g. do NOT create a structure, then a page, then another structure).
+- If a sheet does not exist in the file, skip that step and go to the next.
+- The order is mandatory because later entities depend on earlier ones (e.g. categories depend on vocabularies, child pages depend on parent pages, users depend on roles).
+
+AUTOMATIC FLOW (CRITICAL):
+During batch processing of an Excel file, NEVER STOP to ask for confirmations or show intermediate results to the user.
+- If you need to resolve IDs, names, or references (e.g. roleId to assign roles, vocabularyId for categories, friendlyUrlPath for parent pages), call the necessary tools (get_available_roles, get_vocabularies, search_pages, etc.) and use the results INTERNALLY to continue operations.
+- Do NOT present the results of these lookups to the user as if they were a final answer.
+- Do NOT ask "Want to see more?" or "Should I proceed?" — ALWAYS proceed automatically.
+- The only output to the user should be: progress messages ✅ and the final summary 🎉.
+- If a lookup tool (get_available_roles, get_vocabularies, search_pages, etc.) is needed to resolve a reference, call it, extract the needed data, and CONTINUE with the next creation without stopping.
+
+SHEET FORMATS:
+- "Strutture" sheet: NomeStruttura | Campo | Tipo | Obbligatorio | Opzioni
+  → Create DDM structures grouped by NomeStruttura, with fields of the specified Tipo.
+  → For "select" type, use the pipe-separated values in Opzioni as field options.
+  → Valid Tipo values: text, textarea, date, decimal, integer, boolean, select, document
+
+- "Oggetti" sheet: NomeOggetto | Campo | Tipo | Obbligatorio | Scope
+  → Create Object Definitions grouped by NomeOggetto.
+  → Scope column (only on first row of each object): "site", "company", or empty.
+  → Valid Tipo values: text, textarea, date, decimal, integer, boolean, select, document
+
+- "Vocabolari" sheet: Nome | Tipo | Descrizione | VocabolarioPadre | MultiValued
+  → Create taxonomy vocabularies and categories.
+  → Tipo: "Vocabolario" (creates a vocabulary) or "Categoria" (creates a category inside a vocabulary).
+  → VocabolarioPadre: for categories, the NAME of the parent vocabulary or parent category. For vocabularies, leave empty.
+  → MultiValued: "si" = vocabulary allows multiple categories per content, "no" = single category. Only for vocabulary rows.
+  → IMPORTANT: Create vocabularies FIRST, then their categories. For nested categories, create parent categories before children.
+  → For categories, use taxonomyVocabularyId (resolved from the vocabulary name) or parentTaxonomyCategory for nested categories.
+  → Descrizione: optional description for vocabulary or category.
+
+- "Roles" sheet: RoleName | Type | Description
+  → Create roles using create_role.
+  → Type: "Regular" (portal-wide), "Site" (site-scoped), or "Organization" (org-scoped). Default is "Regular".
+  → RoleName must be unique in the portal.
+  → Description: optional role description.
+
+- "Users" sheet: FirstName | LastName | Email | ScreenName | Password | RoleName
+  → Create users using create_user, then assign roles using assign_role_to_user.
+  → RoleName: comma-separated list of role names (must match roles from the Roles sheet or existing portal roles).
+  → IMPORTANT: Create roles FIRST, then users. Assign roles after the user is created.
+  → ScreenName and Email must be unique in the portal.
+  → Password should be a strong temporary password the user will change on first login.
+
+- "Pagine" sheet: Pagina | Tipo | FriendlyURL | PaginaPadre | MasterPage
+  → Create site pages using create_site_page.
+  → FriendlyURL MUST start with "/" — use "/home" not "home".
+  → FriendlyURL is ONLY for root-level pages. For child pages, leave it empty — Liferay generates it from the title.
+  → PaginaPadre: the NAME of the parent page (e.g. "Home", "Servizi"), NOT the friendlyUrlPath. The tool will resolve it automatically.
+  → IMPORTANT: Create pages in hierarchical order — parent pages FIRST, then children.
+  → For child pages, use parentSitePage: { friendlyUrlPath: "<resolved path>" } — the tool resolves the parent name to its friendlyUrlPath.
+  → CRITICAL: When creating a child page (with parentSitePage), do NOT include friendlyUrlPath — Liferay generates it automatically from the title.
+  → Tipo: "Pagina contenuto" or "Pagina widget".
+  → MasterPage: the key of the master page template (empty = default). Use list_master_pages to find available keys.
+
+EXCEL TEMPLATE GENERATION:
+When the user asks for an Excel template (e.g. "give me a template", "I need a template for creating structures", "generate a template file"), use the generate_excel_template tool:
+- locale: "it" for Italian (default), "en" for English
+- sheets: array of sheets to include: "structures", "objects", "vocabularies", "pages", "roles", "users". If the user doesn't specify, include ALL sheets.
+- file_name: optional custom file name (default: "template_{locale}.xlsx")
+- IMPORTANT: generate_excel_template is NOT a batch creation tool. It only generates and uploads a template file. Do NOT count it as a batch progress step.
+The tool generates the Excel file and uploads it to the "template" folder in the Document Library. After the tool returns, inform the user that the template is available for download in the Document Library under the "template" folder.` ,
 
         rule8: `━━━ KNOWN LIFERAY API LIMITATIONS ━━━
 L1. ORGANIZATIONS AND USER GROUPS: Headless APIs do NOT support assigning a user to an organization or user group. If requested, explain it's not possible via API and suggest Control Panel → Users → Edit User → Organizations / User Groups.

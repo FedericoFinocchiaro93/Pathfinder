@@ -9,9 +9,11 @@ import {
     buildKeywordFilter, encodeFilter,
     parseStructuredContentItem,
     fetchApiList, fetchApiSpec,
+    liferayEnsureFolder,
     ENRICH_FRIENDLY_LIMIT,
     getCachedResponse, setCachedResponse,
 } from './liferay.js';
+import { generateTemplateBuffer, parseExcelFromBuffer } from './excelTemplate.js';
 import { buildIndex, findBestUrl } from './pageIndex.js';
 
 function _formatDocSize(bytes) {
@@ -79,6 +81,7 @@ const NO_SITE_TOOLS = new Set([
     'create_object', 'delete_object',
     'create_content_structure', 'create_content_folder', 'list_content_folders', 'delete_content_folder', 'update_content_folder', 'create_object_entry_folder', 'list_object_entry_folders', 'delete_object_entry_folder', 'update_object_entry_folder', 'create_structured_content', 'update_structured_content',
     'pick_document', 'list_document_folders', 'list_folder_documents', 'upload_document',
+    'generate_excel_template',
     'get_content_structure_fields',
     'update_space', 'delete_space', 'create_space', 'connect_space_site', 'disconnect_space_site',
     'assign_user_to_space', 'remove_user_from_space',
@@ -309,8 +312,13 @@ export async function executeTool(name, input, cfg) {
                 const body = {}; ['pageType','viewableBy','datePublished'].forEach((k) => { if (input[k] !== undefined) body[k] = input[k]; });
                 body.title_i18n = input.title_i18n ? normalizeI18n(input.title_i18n) : (defaultLang ? { [defaultLang]: input.title } : undefined);
                 if (!body.title_i18n) body.title = input.title;
-                if (input.friendlyUrlPath_i18n) body.friendlyUrlPath_i18n = normalizeI18n(input.friendlyUrlPath_i18n); else if (input.friendlyUrlPath) body.friendlyUrlPath = input.friendlyUrlPath;
+                if (input.friendlyUrlPath_i18n) body.friendlyUrlPath_i18n = normalizeI18n(input.friendlyUrlPath_i18n); else if (input.friendlyUrlPath) body.friendlyUrlPath = input.friendlyUrlPath.startsWith('/') ? input.friendlyUrlPath : '/' + input.friendlyUrlPath;
                 if (Array.isArray(input.keywords)) body.keywords = input.keywords; if (Array.isArray(input.taxonomyCategoryIds)) body.taxonomyCategoryIds = input.taxonomyCategoryIds.map(Number); if (input.pageDefinition) body.pageDefinition = input.pageDefinition; if (input.pageSettings) body.pageSettings = input.pageSettings; if (input.parentSitePage) body.parentSitePage = input.parentSitePage;
+                // When creating a child page (parentSitePage is set), Liferay does not accept friendlyUrlPath — it generates it from the title
+                if (body.parentSitePage && body.friendlyUrlPath) {
+                    dbg('create_site_page: removing friendlyUrlPath because parentSitePage is set — Liferay generates it from title');
+                    delete body.friendlyUrlPath;
+                }
                 if (!body.title) { if (body.title_i18n) { const v = defaultLang && body.title_i18n[defaultLang] ? body.title_i18n[defaultLang] : Object.values(body.title_i18n).find((v) => v?.trim()); if (v) body.title = v; } if (!body.title) body.title = input.title; }
                 if (!body.title_i18n && body.title && defaultLang) body.title_i18n = { [defaultLang]: body.title };
                 // resolve parent
@@ -2868,7 +2876,26 @@ export async function executeTool(name, input, cfg) {
                     } else if (mimeType === 'application/pdf') {
                         result.textContent = '[PDF content not directly extractable via REST API. Use the contentUrl to download the PDF.]';
                         result.textExtracted = false;
-                    } else if (mimeType.includes('word') || mimeType.includes('officedocument') || mimeType.includes('spreadsheet') || mimeType.includes('presentation')) {
+                    } else if (mimeType.includes('spreadsheet') || mimeType.includes('excel') || fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || fileName.endsWith('.csv')) {
+                        // Excel files: download and parse them into structured text
+                        try {
+                            const fileRes = await fetch(contentUrl, { headers: { Authorization: 'Basic ' + btoa(user + ':' + pass) } });
+                            if (fileRes.ok) {
+                                const arrayBuffer = await fileRes.arrayBuffer();
+                                const excelText = await parseExcelFromBuffer(arrayBuffer);
+                                result.textContent = excelText;
+                                result.textExtracted = true;
+                                result.textFormat = 'excel_structured';
+                            } else {
+                                result.textContent = '[Excel file — content could not be downloaded. Use the contentUrl to download it manually.]';
+                                result.textExtracted = false;
+                            }
+                        } catch (parseErr) {
+                            dbg('[pick_document] Excel parse error:', parseErr.message);
+                            result.textContent = `[Excel file — error parsing content: ${parseErr.message}. Use the contentUrl to download it manually.]`;
+                            result.textExtracted = false;
+                        }
+                    } else if (mimeType.includes('word') || mimeType.includes('officedocument') || mimeType.includes('presentation')) {
                         result.textContent = '[Office document content not directly extractable via REST API. Use the contentUrl to download the file.]';
                         result.textExtracted = false;
                     } else if (mimeType.startsWith('image/')) {
@@ -3002,6 +3029,54 @@ export async function executeTool(name, input, cfg) {
                 return result;
             } catch (e) {
                 return { error: `Errore nel caricamento del file "${pendingFile.name}": ${e.message}` };
+            }
+        }
+
+        // ── GENERATE EXCEL TEMPLATE ──────────────────────────────────────────
+        if (name === 'generate_excel_template') {
+            const locale = input?.locale || 'it';
+            const sheets = input?.sheets || null;
+            const fileName = input?.file_name || `template_${locale}.xlsx`;
+
+            try {
+                dbg('[generate_excel_template] Generating template, locale:', locale, 'sheets:', sheets, 'fileName:', fileName);
+
+                // 1. Generate the Excel file
+                const buffer = await generateTemplateBuffer(locale, sheets);
+                dbg('[generate_excel_template] Buffer generated, size:', buffer?.byteLength);
+
+                // 2. Convert ArrayBuffer to Blob
+                const blob = new Blob([buffer], {
+                    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                });
+
+                // 3. Ensure "template" folder exists in DML
+                dbg('[generate_excel_template] Ensuring template folder...');
+                const templateFolder = await liferayEnsureFolder(base, siteId, 'template', undefined, user, pass);
+                const folderId = templateFolder.id;
+                dbg('[generate_excel_template] Template folder ID:', folderId);
+
+                // 4. Upload the file to the template folder
+                dbg('[generate_excel_template] Uploading file:', fileName);
+                const doc = await liferayUploadDocument(base, siteId, blob, fileName, fileName, folderId, user, pass);
+                dbg('[generate_excel_template] Upload complete, doc ID:', doc.id);
+
+                return {
+                    success: true,
+                    id: doc.id,
+                    title: doc.title || fileName,
+                    fileName: doc.fileName || fileName,
+                    folderId: folderId,
+                    folderName: 'template',
+                    mimeType: doc.mimeType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    size: _formatDocSize(doc.size || buffer.byteLength),
+                    contentUrl: doc.contentUrl || '',
+                    dateCreated: doc.dateCreated || '',
+                    message: `✅ Template Excel "${fileName}" generato e caricato con successo nella cartella "template" della Document Library.\n\nID documento: ${doc.id}\nCartella: template (ID: ${folderId})\nDimensione: ${_formatDocSize(doc.size || buffer.byteLength)}\n\nIl file è ora disponibile per il download e può essere usato come riferimento per creare contenuti in batch.`,
+                };
+            } catch (e) {
+                dbg('[generate_excel_template] ERROR:', e.message, e.stack);
+                return { error: `Errore nella generazione del template Excel: ${e.message}` };
             }
         }
 

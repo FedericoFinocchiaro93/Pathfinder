@@ -12,6 +12,39 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
+// XLSX is loaded dynamically from CDN to avoid webpack bundling issues
+let _XLSX = null;
+async function loadXLSX() {
+    if (_XLSX) return _XLSX;
+    // Try the npm-bundled version first
+    try {
+        const mod = await import('xlsx');
+        // Webpack ESM dynamic import returns a Module Namespace Object.
+        // The actual XLSX object may be at mod.default or directly on mod.
+        if (mod && mod.utils && typeof mod.utils.book_new === 'function') {
+            _XLSX = mod;
+        } else if (mod && mod.default && mod.default.utils && typeof mod.default.utils.book_new === 'function') {
+            _XLSX = mod.default;
+        } else if (mod && mod.default && typeof mod.default.read === 'function') {
+            _XLSX = mod.default;
+        } else {
+            _XLSX = mod;
+        }
+        return _XLSX;
+    } catch (e) {
+        console.warn('[Excel] npm xlsx import failed, loading from CDN...', e);
+    }
+    // Fallback: load from CDN
+    return new Promise((resolve, reject) => {
+        if (window.XLSX) { _XLSX = window.XLSX; return resolve(_XLSX); }
+        const script = document.createElement('script');
+        script.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+        script.onload = () => { _XLSX = window.XLSX; resolve(_XLSX); };
+        script.onerror = () => reject(new Error('Failed to load xlsx from CDN'));
+        document.head.appendChild(script);
+    });
+}
+
 import { loadCfg, saveCfg } from '../lib/config.js';
 import { getLocale, setLocale, getDictionary, getSupportedLocales } from '../lib/i18n.js';
 import { useAgentFP }    from '../hooks/useAgentFP.js';
@@ -19,6 +52,7 @@ import { useChatHistory} from '../hooks/useChatHistory.js';
 import MessageBubbleFP   from './ui/MessageBubbleFP.jsx';
 import ConfigPanelFP     from './ui/ConfigPanelFP.jsx';
 import UsagePanelFP     from './ui/UsagePanelFP.jsx';
+import ContentStatsPanelFP from './ui/ContentStatsPanelFP.jsx';
 import ConsentScreenFP, { hasConsented } from './ui/ConsentScreenFP.jsx';
 import EulaModalFP      from './ui/EulaModalFP.jsx';
 import DocumentPicker    from './ui/DocumentPicker.jsx';
@@ -80,6 +114,7 @@ function getCurrentModelLabel(cfg) {
 export default function ChatbotFullpage() {
     const [showConfig,   setShowConfig]   = useState(false);
     const [showUsage,    setShowUsage]    = useState(false);
+    const [showStats,    setShowStats]    = useState(false);
     const [sidebarOpen,  setSidebarOpen]  = useState(false);
     const [consentGiven, setConsentGiven] = useState(hasConsented);
     const [showEula,     setShowEula]     = useState(false);
@@ -208,22 +243,61 @@ export default function ChatbotFullpage() {
             setInput('');
             if (textareaRef.current) textareaRef.current.style.height = '';
 
-            // Converti i file in base64 e salvali in cfg._pendingFiles per il tool executor
+            // Separa i file Excel da quelli normali
+            const excelExts = ['.xlsx', '.xls', '.csv'];
+            const excelFiles = droppedFiles.filter(f => excelExts.some(ext => f.file.name.toLowerCase().endsWith(ext)));
+            const otherFiles = droppedFiles.filter(f => !excelExts.some(ext => f.file.name.toLowerCase().endsWith(ext)));
+
+            // Converti i file non-Excel in base64 per il tool executor
             const pendingFiles = [];
-            for (const fileObj of droppedFiles) {
+            for (const fileObj of otherFiles) {
                 try {
                     const data = await fileToBase64(fileObj.file);
                     pendingFiles.push({
                         name: fileObj.file.name,
-                        type: fileObj.file.type || 'application/octet-stream',
+                        type: fileObj.type || 'application/octet-stream',
                         size: fileObj.file.size,
-                        data: data, // base64 string
+                        data: data,
                     });
                 } catch (e) {
                     console.error('Error reading file:', e);
                 }
             }
+
+            // Parsa i file Excel in testo strutturato
+            let excelText = '';
+            const excelNames = [];
+            const failedExcelFiles = [];
+            for (const f of excelFiles) {
+                try {
+                    const sheets = await parseExcelFile(f.file);
+                    const formatted = formatExcelAsText(sheets);
+                    console.log('[Excel] Parsed OK:', f.file.name, 'sheets:', sheets.map(s => s.sheet));
+                    excelText += `\n\n${formatted}`;
+                    excelNames.push(f.file.name);
+                } catch (e) {
+                    console.error('[Excel] Parse FAILED for', f.file.name, e);
+                    failedExcelFiles.push(f);
+                }
+            }
+
+            // Fallback: se il parsing Excel fallisce, trattali come file normali (base64)
+            for (const f of failedExcelFiles) {
+                try {
+                    const data = await fileToBase64(f.file);
+                    pendingFiles.push({
+                        name: f.file.name,
+                        type: f.file.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        size: f.file.size,
+                        data: data,
+                    });
+                    console.log('[Excel] Fallback: added', f.file.name, 'as base64 file');
+                } catch (e2) {
+                    console.error('[Excel] Fallback also failed for', f.file.name, e2);
+                }
+            }
             cfg._pendingFiles = pendingFiles;
+            const isExcelImport = excelNames.length > 0;
 
             // Mostra anteprima nella chat
             const filePreviews = droppedFiles.map(f => ({
@@ -235,14 +309,32 @@ export default function ChatbotFullpage() {
             const userText = text || (droppedFiles.length === 1 ? `📎 ${droppedFiles[0].file.name}` : `📎 ${droppedFiles.length} file allegati`);
 
             // Costruisci il contesto per il LLM
-            const fileInfoList = pendingFiles.map((f, i) =>
-                `- File ${i}: "${f.name}" (${f.type}, ${formatDocSize(f.size)})`
-            ).join('\n');
-            const isImage = pendingFiles.some(f => f.type.startsWith('image/'));
-            const uploadHint = isImage
-                ? `\n\n💡 Se l'utente chiede di caricare questa immagine nella Document Library, usa il tool upload_document. Se chiede di usarla in un contenuto web, carica prima il file con upload_document, poi usa l'ID restituito come value_document_id nel campo image.`
-                : `\n\n💡 Se l'utente chiede di caricare questo file nella Document Library, usa il tool upload_document.`;
-            const llmText = `📎 L'utente ha allegato ${pendingFiles.length === 1 ? 'il seguente file' : 'i seguenti file'}:\n\n${fileInfoList}${uploadHint}\n\n${text || 'Analizza questo file e rispondi alle domande dell\'utente.'}`;
+            let llmText = '';
+
+            // Parte Excel (testo strutturato)
+            if (excelText) {
+                const excelHeader = excelNames.length === 1
+                    ? `${t.excelAttachedSingle}\nFile: ${excelNames[0]}`
+                    : `${t.excelAttachedMultiple}\nFiles: ${excelNames.join(', ')}`;
+                llmText += `${excelHeader}\n${excelText}\n\n💡 ${t.excelDataHint}`;
+            }
+
+            // Parte file normali (base64)
+            if (pendingFiles.length > 0) {
+                const fileInfoList = pendingFiles.map((f, i) =>
+                    `- File ${i}: "${f.name}" (${f.type}, ${formatDocSize(f.size)})`
+                ).join('\n');
+                const isImage = pendingFiles.some(f => f.type.startsWith('image/'));
+                const uploadHint = isImage
+                    ? `\n\n💡 Se l'utente chiede di caricare questa immagine nella Document Library, usa il tool upload_document. Se chiede di usarla in un contenuto web, carica prima il file con upload_document, poi usa l'ID restituito come value_document_id nel campo image.`
+                    : `\n\n💡 Se l'utente chiede di caricare questo file nella Document Library, usa il tool upload_document.`;
+                llmText += (llmText ? '\n\n' : '') + `📎 L'utente ha allegato ${pendingFiles.length === 1 ? 'il seguente file' : 'i seguenti file'}:\n\n${fileInfoList}${uploadHint}`;
+            }
+
+            // Aggiungi il testo dell'utente
+            if (text) llmText += `\n\n${text}`;
+            if (!text && !excelText && pendingFiles.length > 0) llmText += `\n\nAnalizza questo file e rispondi alle domande dell'utente.`;
+            if (!text && excelText && pendingFiles.length === 0) llmText += `\n\n${t.excelAnalyzeHint}`;
 
             // Aggiungi messaggio utente con anteprima file
             setMessages(prev => [...prev, {
@@ -261,7 +353,7 @@ export default function ChatbotFullpage() {
                 chatHistory.createSession(llmText, [...messages, { id: Date.now() + Math.random(), role: 'user', text: llmText }], history);
             }
 
-            runAgent(llmText, setBusy, null);
+            runAgent(llmText, setBusy, null, isExcelImport);
             return;
         }
 
@@ -311,7 +403,7 @@ export default function ChatbotFullpage() {
             }
 
             // Pass null as displayText because we already added the user message manually with docs preview
-            runAgent(llmText, setBusy, null);
+            runAgent(llmText, setBusy, null, false);
             return;
         }
 
@@ -328,7 +420,7 @@ export default function ChatbotFullpage() {
             chatHistory.createSession(text, pendingMessages, history);
         }
 
-        runAgent(text, setBusy);
+        runAgent(text, setBusy, undefined, false);
     }, [input, busy, runAgent, messages, history, chatHistory, selectedDocs, extractDocumentContent, droppedFiles]);
 
     const handleKey = useCallback((e) => {
@@ -354,6 +446,7 @@ export default function ChatbotFullpage() {
         resetUsageSession();
         setShowConfig(false);
         setShowUsage(false);
+        setShowStats(false);
     }, [chatHistory]);
 
     const handleRegenerate = useCallback((sourceQuery) => {
@@ -368,12 +461,13 @@ export default function ChatbotFullpage() {
             if (lastUserIdx === -1) return prev;
             return prev.slice(0, prev.length - lastUserIdx - 1);
         });
-        setTimeout(() => runAgent(sourceQuery, setBusy), 50);
+        setTimeout(() => runAgent(sourceQuery, setBusy, undefined, false), 50);
     }, [busy, runAgent]);
 
     const handleConfigSave = useCallback((newCfg) => {
         setCfg(newCfg);
         setShowConfig(false);
+        setShowStats(false);
         setMessages([]);
         setHistory([]);
         sessionCreatedRef.current = false;
@@ -543,6 +637,44 @@ export default function ChatbotFullpage() {
         });
     }
 
+    // ── Parse Excel files into structured text for the LLM ──────────────────
+    async function parseExcelFile(file) {
+        const XLSX = await loadXLSX();
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const wb = XLSX.read(e.target.result, { type: 'array' });
+                    const result = [];
+                    for (const sheetName of wb.SheetNames) {
+                        const ws = wb.Sheets[sheetName];
+                        const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+                        if (rows.length === 0) continue;
+                        const cols = Object.keys(rows[0]);
+                        result.push({ sheet: sheetName, columns: cols, rows });
+                    }
+                    resolve(result);
+                } catch (err) {
+                    reject(err);
+                }
+            };
+            reader.onerror = reject;
+            reader.readAsArrayBuffer(file);
+        });
+    }
+
+    function formatExcelAsText(sheets) {
+        const parts = [];
+        for (const s of sheets) {
+            parts.push(`[${t.excelSheetLabel}: "${s.sheet}"]`);
+            parts.push(s.columns.join(' | '));
+            for (const row of s.rows) {
+                parts.push(s.columns.map(c => String(row[c] ?? '')).join(' | '));
+            }
+        }
+        return parts.join('\n');
+    }
+
     const hasMessages = messages.length > 0;
 
     // Iniziali dell'utente per l'avatar nel rail
@@ -579,9 +711,12 @@ export default function ChatbotFullpage() {
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                     </button>
                 )}
-                <button className="afp-rail-icon" onClick={() => { setShowConfig(true); setShowUsage(false); }} title={t.railSettings}>⚙</button>
-                <button className="afp-rail-icon" onClick={() => { setShowUsage(true); setShowConfig(false); }} title={t.railUsage || 'Usage'}>
+                <button className="afp-rail-icon" onClick={() => { setShowConfig(true); setShowUsage(false); setShowStats(false); }} title={t.railSettings}>⚙</button>
+                <button className="afp-rail-icon" onClick={() => { setShowUsage(true); setShowConfig(false); setShowStats(false); }} title={t.railUsage || 'Usage'}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="12" width="4" height="9"/><rect x="10" y="7" width="4" height="14"/><rect x="17" y="3" width="4" height="18"/></svg>
+                </button>
+                <button className="afp-rail-icon" onClick={() => { setShowStats(true); setShowConfig(false); setShowUsage(false); }} title={t.railContentStats || 'Content Analytics'}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="M7 16l4-8 4 4 4-6"/></svg>
                 </button>
                 <div className="afp-rail-spacer"></div>
                 <div className="afp-rail-avatar" title={window.Liferay?.ThemeDisplay?.getUserName?.() || t.sidebarUser}>
@@ -652,7 +787,7 @@ export default function ChatbotFullpage() {
                 {/* Footer sidebar — Impostazioni + utente */}
                 <div className="afp-sidebar-footer">
                     <button className="afp-sidebar-footer-btn"
-                        onClick={() => { setShowConfig(true); setShowUsage(false); }}>
+                        onClick={() => { setShowConfig(true); setShowUsage(false); setShowStats(false); }}>
                         {t.sidebarSettings}
                     </button>
                     <div className="afp-sidebar-user" title={window.Liferay?.ThemeDisplay?.getUserName?.() || t.sidebarUser}>
@@ -870,6 +1005,15 @@ n                                style={{ display: 'none' }}
                     <UsagePanelFP
                         cfg={cfg}
                         onBack={() => setShowUsage(false)}
+                        t={t}
+                    />
+                )}
+
+                {/* Content Stats overlay */}
+                {showStats && (
+                    <ContentStatsPanelFP
+                        cfg={cfg}
+                        onBack={() => setShowStats(false)}
                         t={t}
                     />
                 )}

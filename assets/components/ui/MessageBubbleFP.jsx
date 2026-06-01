@@ -6,6 +6,7 @@
 
 import React from 'react';
 import ToolCallBubbleFP from './ToolCallBubbleFP.jsx';
+import ImportProgressBubble from './ImportProgressBubble.jsx';
 import botIcon from '../../img/PathfinderLogo.png';
 import { getDictionary, getLocale } from '../../lib/i18n.js';
 
@@ -94,6 +95,7 @@ function MessageBubbleFP({ msg, onRegenerate }) {
     const t = getDictionary();
     if (msg.type === 'thinking')  return <ThinkingBubble />;
     if (msg.type === 'searching') return <SearchingBubble text={msg.text} />;
+    if (msg.type === 'import_progress') return <ImportProgressBubble msg={msg} />;
 
     const isAssistantWithText = msg.role === 'assistant' && !!msg.text;
 
