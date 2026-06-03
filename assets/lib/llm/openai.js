@@ -131,11 +131,11 @@ export async function fetchOpenAIModels(cfg) {
  * Call OpenAI-compatible LLM API.
  * Works with OpenAI, DeepSeek, Mistral, and any OpenAI-compatible endpoint.
  */
-export async function callOpenAI(history, cfg) {
+export async function callOpenAI(history, cfg, feedbackContext) {
     const model      = openaiModel(cfg);
     const baseUrl    = openaiBaseUrl(cfg);
     const headers    = openaiHeaders(cfg);
-    const systemPrompt = buildSystemPrompt(cfg);
+    const systemPrompt = buildSystemPrompt(cfg, feedbackContext);
     const messages   = toOpenAIMessages(history, systemPrompt);
 
     const body = {

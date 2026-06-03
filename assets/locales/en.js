@@ -227,6 +227,8 @@ export default {
     regenerate: 'Regenerate',
     regenerateTitle: 'Regenerate response',
     regenerateWithTitle: 'Regenerate: "{query}"',
+    feedbackThumbsUp: 'Helpful',
+    feedbackThumbsDown: 'Not helpful',
 
     // ── Tool Call Bubble ──
     toolResults: 'results',
@@ -313,6 +315,9 @@ export default {
     configChatHistory: 'Chat history',
     configChatHistoryLabel: 'Save conversation history',
     configChatHistoryHint: 'When enabled, conversations will be saved in the portal as ChatSession objects. You can find them in the sidebar and resume them at any time. When disabled, no conversations will be saved and the sidebar won\'t show history.',
+    configFeedbackLabel: 'Show feedback buttons',
+    configFeedbackHint: 'Allow users to rate AI responses with thumbs up/down. Feedback is stored in a Liferay Custom Object for analysis.',
+    configFeedbackCreateError: 'Could not create the feedback object in Liferay. Make sure you have admin permissions.',
     configColorTheme: 'Color theme',
     configCustomColor: 'Custom color',
     configSave: '💾 Save settings',

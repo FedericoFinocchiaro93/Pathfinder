@@ -851,6 +851,7 @@ export default function ChatbotFullpage() {
                                 key={msg.id}
                                 msg={msg}
                                 onRegenerate={handleRegenerate}
+                                cfg={cfg}
                             />
                         ))}
                         <div ref={messagesEndRef} />

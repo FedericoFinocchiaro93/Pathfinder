@@ -9,6 +9,7 @@ import { saveCfg }           from '../../lib/config.js';
 import { fetchOllamaModels } from '../../lib/llm/ollama.js';
 import { fetchOpenAIModels } from '../../lib/llm/openai.js';
 import { _apiSpecCache }     from '../../lib/cache.js';
+import { ensureFeedbackObject } from '../../lib/feedbackTracker.js';
 import EulaModalFP          from './EulaModalFP.jsx';
 
 const PRESET_COLORS = [
@@ -292,6 +293,29 @@ function ConfigPanelFP({ cfg, onSave, onBack, t }) {
                             </label>
                             <div className="afp-config-hint">
                                 {t.configChatHistoryHint}
+                            </div>
+                        </div>
+
+                        {/* ── Feedback ── */}
+                        <div className="afp-config-row">
+                            <label className="afp-config-check">
+                                <input type="checkbox" checked={!!local.feedbackEnabled}
+                                    onChange={async (e) => {
+                                        const checked = e.target.checked;
+                                        if (checked) {
+                                            // Ensure the Custom Object exists before enabling
+                                            const ready = await ensureFeedbackObject();
+                                            if (!ready) {
+                                                alert(t.configFeedbackCreateError || 'Could not create the feedback object in Liferay. Make sure you have admin permissions.');
+                                                return;
+                                            }
+                                        }
+                                        set('feedbackEnabled', checked);
+                                    }} />
+                                {t.configFeedbackLabel || 'Show feedback buttons'}
+                            </label>
+                            <div className="afp-config-hint">
+                                {t.configFeedbackHint || 'Allow users to rate responses with thumbs up/down'}
                             </div>
                         </div>
                     </>)}

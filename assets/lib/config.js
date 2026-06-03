@@ -17,6 +17,7 @@ export const DEFAULT_CFG = {
     openaiModel:    '',
     openaiBaseUrl:  '',
     chatHistoryEnabled: true,
+    feedbackEnabled: false,
     budgetUsd:       0,
     colorPrimary:  '#0054b1',
     colorAccent:   '#4f8ef7',

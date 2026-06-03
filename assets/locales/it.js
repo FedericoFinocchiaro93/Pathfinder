@@ -227,6 +227,8 @@ export default {
     regenerate: 'Rigenera',
     regenerateTitle: 'Rigenera risposta',
     regenerateWithTitle: 'Rigenera: "{query}"',
+    feedbackThumbsUp: 'Utile',
+    feedbackThumbsDown: 'Non utile',
 
     // ── Tool Call Bubble ──
     toolResults: 'risultati',
@@ -313,6 +315,9 @@ export default {
     configChatHistory: 'Storico conversazioni',
     configChatHistoryLabel: 'Salva lo storico delle conversazioni',
     configChatHistoryHint: 'Se abilitato, le conversazioni verranno salvate nel portale come oggetti ChatSession. Potrai ritrovarle nella sidebar e riprenderle in qualsiasi momento. Se disabilitato, nessuna conversazione verrà salvata e la sidebar non mostrerà lo storico.',
+    configFeedbackLabel: 'Mostra pulsanti di feedback',
+    configFeedbackHint: 'Permetti agli utenti di valutare le risposte dell\'IA con pollice su/giù. Il feedback viene salvato in un Custom Object di Liferay per analisi.',
+    configFeedbackCreateError: 'Impossibile creare l\'oggetto feedback in Liferay. Assicurati di avere permessi di amministratore.',
     configColorTheme: 'Tema colori',
     configCustomColor: 'Colore personalizzato',
     configSave: '💾 Salva impostazioni',

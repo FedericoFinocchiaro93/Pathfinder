@@ -3,13 +3,13 @@ import { callGemini } from './gemini.js';
 import { callOllama } from './ollama.js';
 import { callOpenAI } from './openai.js';
 
-export function callLLM(history, cfg) {
-    if (cfg.llmProvider === 'gemini')   return callGemini(history, cfg);
-    if (cfg.llmProvider === 'ollama')   return callOllama(history, cfg);
-    if (cfg.llmProvider === 'openai')   return callOpenAI(history, cfg);
-    if (cfg.llmProvider === 'deepseek') return callOpenAI(history, cfg);
-    if (cfg.llmProvider === 'mistral')  return callOpenAI(history, cfg);
-    return callClaude(history, cfg);
+export function callLLM(history, cfg, feedbackContext) {
+    if (cfg.llmProvider === 'gemini')   return callGemini(history, cfg, feedbackContext);
+    if (cfg.llmProvider === 'ollama')   return callOllama(history, cfg, feedbackContext);
+    if (cfg.llmProvider === 'openai')   return callOpenAI(history, cfg, feedbackContext);
+    if (cfg.llmProvider === 'deepseek') return callOpenAI(history, cfg, feedbackContext);
+    if (cfg.llmProvider === 'mistral')  return callOpenAI(history, cfg, feedbackContext);
+    return callClaude(history, cfg, feedbackContext);
 }
 
 export function appendUserMessage(history, text, provider) {

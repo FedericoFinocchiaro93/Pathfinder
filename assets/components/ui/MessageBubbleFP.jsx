@@ -4,11 +4,12 @@
  * Stesse logiche dell'originale, classi CSS afp-* invece di acw-*.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import ToolCallBubbleFP from './ToolCallBubbleFP.jsx';
 import ImportProgressBubble from './ImportProgressBubble.jsx';
 import botIcon from '../../img/PathfinderLogo.png';
 import { getDictionary, getLocale } from '../../lib/i18n.js';
+import { trackFeedback, getFeedback, removeFeedback } from '../../lib/feedbackTracker.js';
 
 function renderContent(text) {
     const escaped = text
@@ -91,8 +92,28 @@ function DocPreview({ doc }) {
     );
 }
 
-function MessageBubbleFP({ msg, onRegenerate }) {
+function MessageBubbleFP({ msg, onRegenerate, cfg }) {
     const t = getDictionary();
+    const [feedback, setFeedback] = useState(() => getFeedback(msg.id));
+    const feedbackEnabled = cfg?.feedbackEnabled !== false;
+
+    const handleFeedback = (rating) => {
+        const newRating = feedback === rating ? null : rating;
+        if (newRating) {
+            trackFeedback({
+                messageId: String(msg.id),
+                rating: newRating,
+                query: msg.sourceQuery || '',
+                response: (msg.text || '').substring(0, 2000),
+                provider: cfg?.llmProvider || '',
+                model: cfg?.model || '',
+                toolCalls: msg.toolCalls || '',
+            });
+        } else {
+            removeFeedback(String(msg.id));
+        }
+        setFeedback(newRating);
+    };
     if (msg.type === 'thinking')  return <ThinkingBubble />;
     if (msg.type === 'searching') return <SearchingBubble text={msg.text} />;
     if (msg.type === 'import_progress') return <ImportProgressBubble msg={msg} />;
@@ -128,15 +149,35 @@ function MessageBubbleFP({ msg, onRegenerate }) {
                 {msg.text && (
                     <div className="afp-bubble">{renderContent(msg.text)}</div>
                 )}
-                {isAssistantWithText && onRegenerate && (
-                    <button
-                        className="afp-regen-btn"
-                        title={msg.sourceQuery ? t.regenerateWithTitle.replace('{query}', msg.sourceQuery) : t.regenerateTitle}
-                        onClick={() => onRegenerate(msg.sourceQuery || '')}
-                        aria-label={t.regenerateTitle}
-                    >
-                        ↻ {t.regenerate}
-                    </button>
+                {isAssistantWithText && (onRegenerate || feedbackEnabled) && (
+                    <div className="afp-msg-actions">
+                        {onRegenerate && (
+                            <button
+                                className="afp-regen-btn"
+                                title={msg.sourceQuery ? t.regenerateWithTitle.replace('{query}', msg.sourceQuery) : t.regenerateTitle}
+                                onClick={() => onRegenerate(msg.sourceQuery || '')}
+                                aria-label={t.regenerateTitle}
+                            >
+                                ↻ {t.regenerate}
+                            </button>
+                        )}
+                        {feedbackEnabled && (
+                            <>
+                                <button
+                                    className={`afp-feedback-btn afp-feedback-btn-up${feedback === 'up' ? ' afp-feedback-active' : ''}`}
+                                    onClick={() => handleFeedback('up')}
+                                    title={t.feedbackThumbsUp || 'Helpful'}
+                                    aria-label={t.feedbackThumbsUp || 'Helpful'}
+                                >👍</button>
+                                <button
+                                    className={`afp-feedback-btn afp-feedback-btn-down${feedback === 'down' ? ' afp-feedback-active' : ''}`}
+                                    onClick={() => handleFeedback('down')}
+                                    title={t.feedbackThumbsDown || 'Not helpful'}
+                                    aria-label={t.feedbackThumbsDown || 'Not helpful'}
+                                >👎</button>
+                            </>
+                        )}
+                    </div>
                 )}
             </div>
         </div>

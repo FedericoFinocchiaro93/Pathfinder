@@ -1,13 +1,13 @@
 import { buildSystemPrompt } from '../prompts.js';
 import { TOOLS_GEMINI }      from '../tools.js';
 
-export async function callGemini(contents, cfg) {
+export async function callGemini(contents, cfg, feedbackContext) {
     const apiKey = cfg.geminiApiKey;
     const model  = cfg.geminiModel || 'gemini-2.0-flash';
     if (!apiKey) throw new Error('API Key Gemini non configurata. Apri le impostazioni ⚙');
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ system_instruction: { parts: [{ text: buildSystemPrompt(cfg) }] }, contents, tools: TOOLS_GEMINI, generationConfig: { maxOutputTokens: 8192 } }),
+        body: JSON.stringify({ system_instruction: { parts: [{ text: buildSystemPrompt(cfg, feedbackContext) }] }, contents, tools: TOOLS_GEMINI, generationConfig: { maxOutputTokens: 8192 } }),
     });
     if (!res.ok) throw new Error(`Errore Gemini (${res.status}): ${(await res.text()).substring(0, 300)}`);
     const data = await res.json();

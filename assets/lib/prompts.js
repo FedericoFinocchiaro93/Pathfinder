@@ -5,7 +5,7 @@
 import { getBaseUrl, getSiteId } from './liferay.js';
 import { getDictionary, getLocale } from './i18n.js';
 
-export function buildSystemPrompt(cfg) {
+export function buildSystemPrompt(cfg, feedbackContext) {
     const base   = getBaseUrl(cfg.liferayUrl);
     const siteId = getSiteId(cfg.siteGroupId);
     const locale = getLocale();
@@ -18,8 +18,8 @@ export function buildSystemPrompt(cfg) {
     } catch (_) {}
     // Ollama uses a shorter prompt; all other providers (Anthropic, Gemini, OpenAI, DeepSeek, Mistral) use the full prompt
     return cfg.llmProvider === 'ollama'
-        ? buildOllamaPrompt(base, siteId, siteName, t)
-        : buildFullPrompt(base, siteId, siteName, t);
+        ? buildOllamaPrompt(base, siteId, siteName, t, feedbackContext)
+        : buildFullPrompt(base, siteId, siteName, t, feedbackContext);
 }
 
 const TOOL_RULES = (siteId, t) => {
@@ -40,12 +40,39 @@ const TOOL_RULES = (siteId, t) => {
     return `FUNDAMENTAL TOOL RULES:\n${rules.join('\n\n')}`;
 };
 
-function buildOllamaPrompt(baseUrl, siteId, siteName, t) {
+function buildOllamaPrompt(baseUrl, siteId, siteName, t, feedbackContext) {
     const p = t.prompt;
-    return `${p.systemRole}\nPORTALE: ${baseUrl}\nSITE ID: ${siteId} — SITE NAME: ${siteName}\n\n${p.alwaysLanguage}\n${TOOL_RULES(siteId, t)}`;
+    let prompt = `${p.systemRole}\nPORTALE: ${baseUrl}\nSITE ID: ${siteId} — SITE NAME: ${siteName}\n\n${p.alwaysLanguage}\n${TOOL_RULES(siteId, t)}`;
+    if (feedbackContext) prompt += `\n\n${feedbackContext}`;
+    return prompt;
 }
 
-function buildFullPrompt(baseUrl, siteId, siteName, t) {
+function buildFullPrompt(baseUrl, siteId, siteName, t, feedbackContext) {
     const p = t.prompt;
-    return `${p.systemRole}\nPORTALE: ${baseUrl} — SITE ID: ${siteId} — OGGI: ${new Date().toISOString().slice(0, 10)}\n\n${p.alwaysLanguage} Usa i tool disponibili per rispondere alle domande dell'utente sul portale Liferay.\n${TOOL_RULES(siteId, t)}`;
+    let prompt = `${p.systemRole}\nPORTALE: ${baseUrl} — SITE ID: ${siteId} — OGGI: ${new Date().toISOString().slice(0, 10)}\n\n${p.alwaysLanguage} Usa i tool disponibili per rispondere alle domande dell'utente sul portale Liferay.\n${TOOL_RULES(siteId, t)}`;
+    if (feedbackContext) prompt += `\n\n${feedbackContext}`;
+    return prompt;
+}
+
+/**
+ * Build a context block from positively-rated Q&A pairs.
+ * @param {Array<{query: string, response: string, toolCalls: string, score: number}>} items
+ * @returns {string}
+ */
+export function buildFeedbackContext(items) {
+    if (!items || items.length === 0) return '';
+    const entries = items.map((item, i) => {
+        let entry = `DOMANDA: ${item.query}\nRISPOSTA APPROVATA (score: ${item.score || 1}): ${item.response}`;
+        if (item.toolCalls) {
+            try {
+                const calls = typeof item.toolCalls === 'string' ? JSON.parse(item.toolCalls) : item.toolCalls;
+                if (Array.isArray(calls) && calls.length > 0) {
+                    const callNames = calls.map(c => `${c.name}(${Object.keys(c.input || {}).slice(0, 3).join(', ')}...)`).join(', ');
+                    entry += `\nTOOL CHIAMATI: ${callNames}`;
+                }
+            } catch (_) { /* ignore parse errors */ }
+        }
+        return entry;
+    }).join('\n\n---\n\n');
+    return `═══ RISPOSTE APPROVATE DAGLI UTENTI ═══\nLe seguenti domande hanno ricevuto feedback positivo dagli utenti (ordinato per rilevanza e score). Usa queste risposte come riferimento privilegiato quando la domanda dell'utente è simile:\n\n${entries}\n═══ FINE RISPOSTE APPROVATE ═══`;
 }

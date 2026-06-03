@@ -10,9 +10,9 @@ export async function fetchOllamaModels(cfg) {
     return ((await res.json()).models || []).map((m) => m.name);
 }
 
-export async function callOllama(messages, cfg) {
+export async function callOllama(messages, cfg, feedbackContext) {
     if (!cfg.ollamaModel) throw new Error('Modello Ollama non configurato. Apri le impostazioni ⚙');
-    const systemContent = buildSystemPrompt(cfg);
+    const systemContent = buildSystemPrompt(cfg, feedbackContext);
     const hasSystem     = messages.some((m) => m.role === 'system');
     const fullMessages  = hasSystem ? messages.map((m) => m.role === 'system' ? { ...m, content: systemContent } : m) : [{ role: 'system', content: systemContent }, ...messages];
     const res = await fetch(ollamaBaseUrl(cfg.ollamaUrl) + '/api/chat', {

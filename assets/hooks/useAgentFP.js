@@ -15,6 +15,8 @@ import { executeTool }                from '../lib/toolExecutor.js';
 import { getBaseUrl, getSiteId }      from '../lib/liferay.js';
 import { getDictionary, getLocale }   from '../lib/i18n.js';
 import { trackCall, setOllamaContextLength, setGeminiContextLength } from '../lib/llmUsageTracker.js';
+import { fetchPositiveFeedback } from '../lib/feedbackTracker.js';
+import { buildFeedbackContext } from '../lib/prompts.js';
 import {
     callLLM,
     appendUserMessage,
@@ -213,6 +215,20 @@ export function useAgentFP({ cfg, history, setHistory, setMessages }) {
 
         let currentHistory = appendUserMessage(history, userText, p);
 
+        // ── Fetch positive feedback context for RAG ──
+        let feedbackContext = null;
+        if (cfg.feedbackEnabled) {
+            try {
+                const positiveItems = await fetchPositiveFeedback(userText, 5);
+                if (positiveItems.length > 0) {
+                    feedbackContext = buildFeedbackContext(positiveItems);
+                    dbg('[FP] Injected', positiveItems.length, 'positive feedback items into system prompt');
+                }
+            } catch (e) {
+                dbg('[FP] Failed to fetch positive feedback:', e.message);
+            }
+        }
+
         // ── Batch progress tracking ──
         // Track creation tools during Excel batch processing to emit progress messages
         // Only show ImportProgressBubble when importing from an Excel file (isExcelImport param)
@@ -254,6 +270,7 @@ export function useAgentFP({ cfg, history, setHistory, setMessages }) {
         const batchSuccesses = [];  // [{ label: 'Struttura', name: 'Nome Entità' }, ...]
         let lastBatchProgressType = null;
         let importProgressMsgId = null; // ID of the import_progress message for in-place updates
+        const allToolCalls = []; // Accumulate tool calls for feedback tracking
 
         // Helper: extract a human-readable entity name from tool input/result
         function extractEntityName(toolName, input, result) {
@@ -272,7 +289,7 @@ export function useAgentFP({ cfg, history, setHistory, setMessages }) {
                 iterations++;
                 dbg(`[FP] Iterazione ${iterations}, history len:`, currentHistory.length);
 
-                const response = await callLLM(currentHistory, cfg);
+                const response = await callLLM(currentHistory, cfg, feedbackContext);
 
                 // ── Track LLM usage ──────────────────────────────────────────
                 if (response.usage) {
@@ -349,6 +366,7 @@ export function useAgentFP({ cfg, history, setHistory, setMessages }) {
                             setMessages((prev) => [...prev, {
                                 id: Date.now() + Math.random(), role: 'assistant',
                                 text: summaryMsg, sourceQuery: userText,
+                                toolCalls: allToolCalls.length > 0 ? JSON.stringify(allToolCalls) : '',
                             }]);
                             emittedOwnSummary = true;
                         }
@@ -360,6 +378,7 @@ export function useAgentFP({ cfg, history, setHistory, setMessages }) {
                         setMessages((prev) => [...prev, {
                             id: Date.now() + Math.random(), role: 'assistant',
                             text: response.text, sourceQuery: userText,
+                            toolCalls: allToolCalls.length > 0 ? JSON.stringify(allToolCalls) : '',
                         }]);
                     }
                     currentHistory = appendAssistantToHistory(currentHistory, response, p);
@@ -379,6 +398,11 @@ export function useAgentFP({ cfg, history, setHistory, setMessages }) {
 
                 if (response.stop_reason === 'tool_use') {
                     const { toolUseBlocks } = response;
+
+                    // Accumulate tool calls for feedback tracking
+                    for (const tb of toolUseBlocks) {
+                        allToolCalls.push({ name: tb.name, input: tb.input });
+                    }
 
                     removeThinking();
                     setSearchingMsg(buildSearchingMessage(userText));

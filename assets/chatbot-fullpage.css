@@ -765,6 +765,47 @@ ai-chatbot-fullpage {
     background: var(--afp-tool-bg);
 }
 
+/* ── Message actions row (regenerate + feedback) ── */
+.afp-msg-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+/* ── Feedback buttons (thumbs up/down) ── */
+.afp-feedback-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--afp-border);
+    border-radius: 50%;
+    background: transparent;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.18s;
+    padding: 0;
+    line-height: 1;
+}
+
+.afp-feedback-btn:hover {
+    border-color: var(--afp-accent);
+    background: var(--afp-tool-bg);
+    transform: scale(1.1);
+}
+
+.afp-feedback-btn-up.afp-feedback-active {
+    border-color: #22c55e;
+    background: rgba(34, 197, 94, 0.12);
+}
+
+.afp-feedback-btn-down.afp-feedback-active {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.12);
+}
+
 /* Tool call bubble */
 .afp-tool-call {
     display: flex;
