@@ -366,7 +366,7 @@ function UsagePanelFP({ cfg, onBack, t }) {
                             </div>
                         )}
                     </div>
-                </div>}
+                </div>
 
                 {/* ── Pricing info ── */}
                 <div className="afp-usage-section">

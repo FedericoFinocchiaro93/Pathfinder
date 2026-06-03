@@ -4,7 +4,7 @@
  * Click on chart slices navigates to detail tabs or shows drill-down lists.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     loadAllData,
     getDataCache,
@@ -27,6 +27,7 @@ import {
     fetchFilteredArticlesByAuthorAndStructure,
     fetchFilteredArticlesByAuthorAndCategory,
     formatBytes,
+    SYSTEM_AUTHOR_KEY,
 } from '../../lib/contentStats.js';
 
 // ── Color palette — refined, enterprise-grade ──────────────────────────────
@@ -191,14 +192,15 @@ function MetricCard({ label, value, color, onClick }) {
 }
 
 // ── Bar Chart (SVG) ─────────────────────────────────────────────────────────
-function BarChart({ data, valueKey, labelKey, barColor = '#6366f1', height = 180, maxBars = 12, onBarClick }) {
+function BarChart({ data, valueKey, labelKey, barColor = '#6366f1', height = 180, maxBars = 12, onBarClick, compact }) {
     if (!data || data.length === 0) return <div className="afp-stats-empty">—</div>;
     const bars = data.slice(0, maxBars);
     const maxVal = Math.max(...bars.map(d => d[valueKey] || 0), 1);
+    const isCompact = compact !== undefined ? compact : bars.length <= 6;
 
     return (
         <div className="afp-stats-bar-container">
-            <div className="afp-stats-bar-chart" style={{ height }}>
+            <div className={`afp-stats-bar-chart${isCompact ? ' afp-stats-bar-compact' : ''}`} style={{ height }}>
                 {bars.map((item, i) => {
                     const val = item[valueKey] || 0;
                     const pct = maxVal > 0 ? (val / maxVal) * 100 : 0;
@@ -337,6 +339,9 @@ const TABS = ['contents', 'pages', 'vocabularies', 'documents'];
 
 // ── Main component ─────────────────────────────────────────────────────────
 function ContentStatsPanelFP({ cfg, onBack, t }) {
+    /** Display an author name, replacing the system sentinel with a localized label */
+    const displayAuthor = (name) => name === SYSTEM_AUTHOR_KEY ? (t.statsSystemAuthor || 'System') : name;
+
     const [tab, setTab] = useState('contents');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -365,6 +370,7 @@ function ContentStatsPanelFP({ cfg, onBack, t }) {
     const [contentGaps, setContentGaps] = useState(null);
     const [staleContent, setStaleContent] = useState([]);
     const [alerts, setAlerts] = useState([]);
+    const [timelineMonths, setTimelineMonths] = useState(12);
     const PAGE_SIZE = 10;
 
     const loadAll = useCallback(async () => {
@@ -408,6 +414,19 @@ function ContentStatsPanelFP({ cfg, onBack, t }) {
     }, [cfg]);
 
     useEffect(() => { loadAll(); }, [loadAll]);
+
+    // ── Timeline months selector ───────────────────────────────────────
+    const timelineOptions = [3, 6, 12, 24];
+    const contentTimeline = useMemo(() => {
+        if (!insights) return null;
+        const cache = getDataCache();
+        return computeContentInsights(cache, timelineMonths);
+    }, [insights, timelineMonths]);
+    const pageTimeline = useMemo(() => {
+        if (!pageInsights) return null;
+        const cache = getDataCache();
+        return computePagesInsights(cache, timelineMonths);
+    }, [pageInsights, timelineMonths]);
 
     const tabLabels = { contents: t.statsTabContents || 'Contents', pages: t.statsTabPages || 'Pages', vocabularies: t.statsTabVocabularies || 'Vocabularies', documents: t.statsTabDocuments || 'Documents' };
 
@@ -563,6 +582,7 @@ function ContentStatsPanelFP({ cfg, onBack, t }) {
                                 <thead><tr>
                                     <th>{t.statsColTitle || 'Title'}</th>
                                     <th>{t.statsColStatus || 'Status'}</th>
+                                    {drillFilter?.type?.startsWith('page') && <th>{t.statsColParentPage || 'Parent'}</th>}
                                     <th>{t.statsColAuthor || 'Author'}</th>
                                     <th>{t.statsColDate || 'Date'}</th>
                                     <th>{t.statsColReviewDate || 'Review'}</th>
@@ -598,9 +618,10 @@ function ContentStatsPanelFP({ cfg, onBack, t }) {
                                             <tr key={a.id || i}>
                                                 <td className="afp-stats-cell-title">{a.title || a.name || '\u2014'}</td>
                                                 <td><span className="afp-stats-status-badge" style={{ background: statusColor + '18', color: statusColor, borderColor: statusColor + '40' }}>{statusLabel}</span></td>
-                                                <td>{a.creator?.name ? (
+                                                {drillFilter?.type?.startsWith('page') && <td>{a.parentPageTitle || (a.depth === 1 ? <span style={{ color: 'var(--afp-text-muted, #64748b)', fontStyle: 'italic' }}>{'\u2014'}</span> : '\u2014')}</td>}
+                                                <td>{a.creator?.name && a.creator.name !== SYSTEM_AUTHOR_KEY ? (
                                                     <span className="afp-stats-author-link" onClick={() => openAuthorDetail(a.creator.name)}>{a.creator.name}</span>
-                                                ) : '\u2014'}</td>
+                                                ) : a.creator?.name === SYSTEM_AUTHOR_KEY ? t.statsSystemAuthor || 'System' : '\u2014'}</td>
                                                 <td>{a.dateCreated ? new Date(a.dateCreated).toLocaleDateString() : '\u2014'}</td>
                                                 <td>{reviewDate ? new Date(reviewDate).toLocaleDateString() : <span style={{ color: 'var(--afp-text-muted, #64748b)', fontStyle: 'italic' }}>{'\u2014'}</span>}</td>
                                                 <td className="afp-stats-td-actions">
@@ -663,7 +684,7 @@ function ContentStatsPanelFP({ cfg, onBack, t }) {
                         <Icon d={Icons.arrowLeft} size={20} />
                     </button>
                     <div className="afp-stats-author-detail-title">
-                        <h2>{ad.authorName}</h2>
+                        <h2>{ad.authorName === SYSTEM_AUTHOR_KEY ? (t.statsSystemAuthor || 'System') : ad.authorName}</h2>
                         <span className="afp-stats-author-detail-subtitle">
                             {ad.totalArticles} {t.statsArticles || 'articles'} · {ad.totalPages} {t.statsPages || 'pages'} · {ad.totalCategories} {t.statsCategoryUsages || 'category usages'}
                         </span>
@@ -812,15 +833,24 @@ function ContentStatsPanelFP({ cfg, onBack, t }) {
                 )}
 
                 {/* Timeline */}
-                {insights?.timeline && (
+                {contentTimeline?.timeline && (
                     <div className={secCls('timeline')}>
-                        <h3>{t.statsTimelineTitle || 'Content Timeline'}</h3>
+                        <div className="afp-stats-timeline-header">
+                            <h3>{t.statsTimelineTitle || 'Content Timeline'}</h3>
+                            <div className="afp-stats-timeline-range">
+                                {timelineOptions.map(m => (
+                                    <button key={m} className={`afp-stats-range-btn${timelineMonths === m ? ' active' : ''}`} onClick={() => setTimelineMonths(m)}>
+                                        {m}m
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                         <div className="afp-stats-timeline-legend">
                             <span className="afp-stats-timeline-dot" style={{ background: '#6366f1' }} />
                             <span>{t.statsTimelineCreated || 'Created'}</span>
                         </div>
                         <div className="afp-stats-timeline-chart">
-                            <BarChart data={insights.timeline} valueKey="created" labelKey="label" barColor="#6366f1" height={160}
+                            <BarChart data={contentTimeline.timeline} valueKey="created" labelKey="label" barColor="#6366f1" height={160}
                                 onBarClick={(item) => openDrillDown('month', { year: item.year, month: item.month }, `${t.statsTimelineTitle || 'Timeline'}: ${item.label}`, 'timeline')} />
                         </div>
                         {ds === 'timeline' && renderDrillDown()}
@@ -858,8 +888,8 @@ function ContentStatsPanelFP({ cfg, onBack, t }) {
                 {authors.length > 0 && (
                     <div className={secCls('authors')}>
                         <h3>{t.statsTopAuthors || 'Top Authors'}</h3>
-                        <ChartView data={authors} valueKey="count" labelKey="author" size={260} innerRatio={0.6}
-                            onSliceClick={(item) => openAuthorDetail(item.author)} />
+                        <ChartView data={authors.map(a => ({ ...a, author: displayAuthor(a.author) }))} valueKey="count" labelKey="author" size={260} innerRatio={0.6}
+                            onSliceClick={(item) => openAuthorDetail(item.author === (t.statsSystemAuthor || 'System') ? SYSTEM_AUTHOR_KEY : item.author)} />
                     </div>
                 )}
 
@@ -881,9 +911,9 @@ function ContentStatsPanelFP({ cfg, onBack, t }) {
                                         <tr key={a.id || i}>
                                             <td className="afp-stats-cell-title">{a.title}</td>
                                             <td>{a.structureName}</td>
-                                            <td>{a.author !== 'Unknown' ? (
+                                            <td>{a.author && a.author !== SYSTEM_AUTHOR_KEY ? (
                                                 <span className="afp-stats-author-link" onClick={() => openAuthorDetail(a.author)}>{a.author}</span>
-                                            ) : '—'}</td>
+                                            ) : a.author === SYSTEM_AUTHOR_KEY ? t.statsSystemAuthor || 'System' : '\u2014'}</td>
                                             <td><span style={{ color: a.staleDays > 180 ? '#ef4444' : a.staleDays > 120 ? '#f59e0b' : '#64748b', fontWeight: 600 }}>{a.staleDays}</span></td>
                                             <td className="afp-stats-td-actions">
                                                 {a.friendlyUrlPath && (
@@ -1071,15 +1101,24 @@ function ContentStatsPanelFP({ cfg, onBack, t }) {
                 )}
 
                 {/* Timeline */}
-                {pi.timeline && (
+                {pageTimeline?.timeline && (
                     <div className={secCls('pageTimeline')}>
-                        <h3>{t.statsPageTimelineTitle || 'Page Timeline'}</h3>
+                        <div className="afp-stats-timeline-header">
+                            <h3>{t.statsPageTimelineTitle || 'Page Timeline'}</h3>
+                            <div className="afp-stats-timeline-range">
+                                {timelineOptions.map(m => (
+                                    <button key={m} className={`afp-stats-range-btn${timelineMonths === m ? ' active' : ''}`} onClick={() => setTimelineMonths(m)}>
+                                        {m}m
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                         <div className="afp-stats-timeline-legend">
                             <span className="afp-stats-timeline-dot" style={{ background: '#6366f1' }} />
                             <span>{t.statsTimelineCreated || 'Created'}</span>
                         </div>
                         <div className="afp-stats-timeline-chart">
-                            <BarChart data={pi.timeline} valueKey="created" labelKey="label" barColor="#6366f1" height={160}
+                            <BarChart data={pageTimeline.timeline} valueKey="created" labelKey="label" barColor="#6366f1" height={160}
                                 onBarClick={(item) => openDrillDown('pageMonth', { year: item.year, month: item.month }, `${t.statsPageTimelineTitle || 'Page Timeline'}: ${item.label}`, 'pageTimeline')} />
                         </div>
                         {ds === 'pageTimeline' && renderDrillDown()}
@@ -1116,8 +1155,8 @@ function ContentStatsPanelFP({ cfg, onBack, t }) {
                 {pi.byAuthor.length > 0 && (
                     <div className={secCls('pageAuthors')}>
                         <h3>{t.statsPageAuthors || 'Pages by Author'}</h3>
-                        <ChartView data={pi.byAuthor} valueKey="count" labelKey="author" size={260} innerRatio={0.6}
-                            onSliceClick={(item) => openAuthorDetail(item.author)} />
+                        <ChartView data={pi.byAuthor.map(a => ({ ...a, author: displayAuthor(a.author) }))} valueKey="count" labelKey="author" size={260} innerRatio={0.6}
+                            onSliceClick={(item) => openAuthorDetail(item.author === (t.statsSystemAuthor || 'System') ? SYSTEM_AUTHOR_KEY : item.author)} />
                     </div>
                 )}
 
@@ -1126,10 +1165,23 @@ function ContentStatsPanelFP({ cfg, onBack, t }) {
                     <div className={secCls('pageHierarchy')}>
                         <h3>{t.statsPageHierarchy || 'Site Hierarchy'}</h3>
                         <div className="afp-stats-metrics-row">
-                            <MetricCard label={t.statsTotalPages || 'Total Pages'} value={pi.hierarchy.totalPages} color={COLORS[0]} />
-                            <MetricCard label={t.statsRootPages || 'Root Pages'} value={pi.hierarchy.rootPages} color={COLORS[2]} />
-                            <MetricCard label={t.statsMaxDepth || 'Max Depth'} value={pi.hierarchy.maxDepth} color={COLORS[4]} />
+                            <MetricCard label={t.statsTotalPages || 'Total Pages'} value={pi.hierarchy.totalPages} color={COLORS[0]}
+                                onClick={() => openDrillDown('pageDepth', 0, t.statsAllPages || 'All Pages', 'pageHierarchy')} />
+                            {Array.from({ length: pi.hierarchy.maxDepth }, (_, i) => {
+                                const depth = i + 1;
+                                const count = (pi.hierarchy.depthCounts || {})[depth] || 0;
+                                const colors = [COLORS[2], COLORS[3], COLORS[4], COLORS[1], COLORS[5]];
+                                return (
+                                    <MetricCard key={depth}
+                                        label={`${t.statsLevel || 'Level'} ${depth}`}
+                                        value={count}
+                                        color={colors[i % colors.length]}
+                                        onClick={() => openDrillDown('pageDepth', depth, `${t.statsLevel || 'Level'} ${depth}`, 'pageHierarchy')}
+                                    />
+                                );
+                            })}
                         </div>
+                        {ds === 'pageHierarchy' && renderDrillDown()}
                     </div>
                 )}
             </div>

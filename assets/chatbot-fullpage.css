@@ -3386,6 +3386,15 @@ ai-chatbot-fullpage {
     min-height: 140px;
 }
 
+.afp-stats-bar-chart.afp-stats-bar-compact {
+    gap: 2px;
+    justify-content: center;
+}
+
+.afp-stats-bar-chart.afp-stats-bar-compact .afp-stats-bar-col {
+    max-width: 60px;
+}
+
 .afp-stats-bar-col {
     flex: 1;
     min-width: 0;
@@ -3596,6 +3605,48 @@ ai-chatbot-fullpage {
 }
 
 /* ── Timeline chart ── */
+.afp-stats-timeline-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+
+.afp-stats-timeline-header h3 {
+    margin: 0;
+}
+
+.afp-stats-timeline-range {
+    display: flex;
+    gap: 4px;
+}
+
+.afp-stats-range-btn {
+    padding: 3px 10px;
+    border: 1px solid var(--afp-border, #e2e8f0);
+    border-radius: 6px;
+    background: var(--afp-bg-panel, #f8fafc);
+    color: var(--afp-text-secondary, #475569);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    line-height: 1.4;
+}
+
+.afp-stats-range-btn:hover {
+    background: var(--afp-accent-light, #eef2ff);
+    border-color: var(--afp-accent, #6366f1);
+    color: var(--afp-accent, #6366f1);
+}
+
+.afp-stats-range-btn.active {
+    background: var(--afp-accent, #6366f1);
+    border-color: var(--afp-accent, #6366f1);
+    color: #fff;
+}
+
 .afp-stats-timeline-chart {
     width: 100%;
     margin-bottom: 8px;

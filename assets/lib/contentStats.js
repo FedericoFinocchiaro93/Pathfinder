@@ -14,6 +14,21 @@ import { liferayGet, getBaseUrl, getSiteId } from './liferay.js';
 import { dbg } from './utils.js';
 import { getDictionary, getLocale } from './i18n.js';
 
+/** Sentinel value for pages/articles created by Liferay system (no creator) */
+export const SYSTEM_AUTHOR_KEY = '__system__';
+
+/**
+ * Resolve a human-readable author name from a creator/author object.
+ * Returns the creator's name, or SYSTEM_AUTHOR_KEY if missing.
+ */
+export function resolveAuthorName(creator) {
+    if (!creator) return SYSTEM_AUTHOR_KEY;
+    if (creator.name) return creator.name;
+    // Admin-site API may return creator with only externalReferenceCode
+    // The default Liferay user ERC is typically a different UUID — treat as system
+    return SYSTEM_AUTHOR_KEY;
+}
+
 // ── API endpoints ──────────────────────────────────────────────────────────
 
 const API = {
@@ -27,7 +42,7 @@ const API = {
         `/o/headless-delivery/v1.0/sites/${siteId}/documents?flatten=true`,
     docFolders:  (siteId) => `/o/headless-delivery/v1.0/sites/${siteId}/document-folders?pageSize=200`,
     pages:       (siteId) =>
-        `/o/headless-delivery/v1.0/sites/${siteId}/site-pages`,
+        `/o/headless-delivery/v1.0/sites/${siteId}/site-pages?nestedFields=embedded`,
     // Admin pages API: returns ALL pages including Draft — uses site externalReferenceCode
     adminPages: (siteKey) =>
         `/o/headless-admin-site/v1.0/sites/${siteKey}/site-pages`,
@@ -374,7 +389,7 @@ export function computeAuthorsStats(cache) {
     const articles = cache._articles || [];
     const authorMap = {};
     for (const a of articles) {
-        const name = a.creator?.name || a.author?.name || 'Unknown';
+        const name = resolveAuthorName(a.creator || a.author);
         if (!authorMap[name]) authorMap[name] = { author: name, count: 0 };
         authorMap[name].count++;
     }
@@ -400,9 +415,10 @@ export function computeVocabulariesStats(cache) {
 /**
  * Compute content insights from cached data.
  * @param {object} cache - DataCache instance
+ * @param {number} [months=12] - Number of months for the timeline
  * @returns {object} { publicationStatus, freshness, timeline, health }
  */
-export function computeContentInsights(cache) {
+export function computeContentInsights(cache, months = 12) {
     const articles = cache._articles || [];
     if (articles.length === 0) return null;
 
@@ -463,7 +479,7 @@ export function computeContentInsights(cache) {
 
     // ── Content Timeline ────────────────────────────────────────────
     const timeline = [];
-    for (let i = 11; i >= 0; i--) {
+    for (let i = months - 1; i >= 0; i--) {
         const d = new Date(now);
         d.setDate(1);
         d.setMonth(d.getMonth() - i);
@@ -515,9 +531,10 @@ export function computeContentInsights(cache) {
 /**
  * Compute pages insights from cached data.
  * @param {object} cache - DataCache instance
+ * @param {number} [months=12] - Number of months for the timeline
  * @returns {object} { byType, publicationStatus, freshness, timeline, health, byAuthor, hierarchy }
  */
-export function computePagesInsights(cache) {
+export function computePagesInsights(cache, months = 12) {
     const pages = cache._pages || [];
     if (pages.length === 0) return null;
 
@@ -586,7 +603,7 @@ export function computePagesInsights(cache) {
 
     // ── Timeline ──────────────────────────────────────────────────
     const timeline = [];
-    for (let i = 11; i >= 0; i--) {
+    for (let i = months - 1; i >= 0; i--) {
         const d = new Date(now);
         d.setDate(1);
         d.setMonth(d.getMonth() - i);
@@ -630,22 +647,46 @@ export function computePagesInsights(cache) {
     // ── By Author ──────────────────────────────────────────────────
     const authorMap = {};
     for (const p of pages) {
-        const name = p.creator?.name || 'Unknown';
+        const name = resolveAuthorName(p.creator);
         if (!authorMap[name]) authorMap[name] = { author: name, count: 0 };
         authorMap[name].count++;
     }
     const byAuthor = Object.values(authorMap).sort((a, b) => b.count - a.count).slice(0, 10);
 
     // ── Hierarchy ──────────────────────────────────────────────────
+    // Use parentSitePage (from nestedFields=embedded) to determine hierarchy.
+    // Pages without parentSitePage are root pages.
     let maxDepth = 0;
     let rootCount = 0;
+    // Build a depth map by walking parent references
+    const depthMap = {};
+    const getDepth = (p) => {
+        const key = p.friendlyUrlPath || p.id;
+        if (depthMap[key] !== undefined) return depthMap[key];
+        const parent = p.parentSitePage;
+        if (!parent || !parent.friendlyUrlPath) {
+            depthMap[key] = 1;
+            return 1;
+        }
+        // Find parent page in the list
+        const parentPage = pages.find(pp => pp.friendlyUrlPath === parent.friendlyUrlPath);
+        const parentDepth = parentPage ? getDepth(parentPage) : 1;
+        depthMap[key] = parentDepth + 1;
+        return depthMap[key];
+    };
     for (const p of pages) {
-        const parentPath = p.friendlyUrlPath?.split('/').slice(0, -1).join('/') || '';
-        if (!parentPath) rootCount++;
-        const depth = (p.friendlyUrlPath?.split('/').length || 1) - 1;
+        const depth = getDepth(p);
+        p._depth = depth; // store for drill-down filtering
+        if (depth === 1) rootCount++;
         if (depth > maxDepth) maxDepth = depth;
     }
-    const hierarchy = { totalPages: pages.length, rootPages: rootCount, maxDepth: Math.max(maxDepth, 1) };
+    // Count pages per depth level
+    const depthCounts = {};
+    for (const p of pages) {
+        const d = p._depth || 1;
+        depthCounts[d] = (depthCounts[d] || 0) + 1;
+    }
+    const hierarchy = { totalPages: pages.length, rootPages: rootCount, maxDepth: Math.max(maxDepth, 1), depthCounts };
 
     return { byType, publicationStatus, freshness, timeline, health, byAuthor, hierarchy };
 }
@@ -779,7 +820,7 @@ export async function fetchFilteredArticles(cfg, filter, page = 1, pageSize = 10
             break;
         }
         case 'author': {
-            filtered = allArticles.filter(a => (a.creator?.name || 'Unknown') === filter.value);
+            filtered = allArticles.filter(a => resolveAuthorName(a.creator || a.author) === filter.value);
             break;
         }
         case 'vocabulary': {
@@ -889,7 +930,14 @@ export async function fetchFilteredPages(cfg, filter, page = 1, pageSize = 10) {
             }
             break;
         case 'pageAuthor':
-            filtered = allPages.filter(p => (p.creator?.name || 'Unknown') === filter.value);
+            filtered = allPages.filter(p => resolveAuthorName(p.creator) === filter.value);
+            break;
+        case 'pageDepth':
+            if (filter.value === 0) {
+                // depth 0 means "all pages" — no filter
+            } else {
+                filtered = allPages.filter(p => (p._depth || 1) === filter.value);
+            }
             break;
     }
 
@@ -901,16 +949,24 @@ export async function fetchFilteredPages(cfg, filter, page = 1, pageSize = 10) {
         return db - da;
     });
     const start = (page - 1) * pageSize;
-    const items = sorted.slice(start, start + pageSize).map(p => ({
-        id: p.pageId || p.id,
-        title: p.title || p.name || '\u2014',
-        name: p.title || p.name || '\u2014',
-        creator: p.creator || { name: 'Unknown' },
-        dateCreated: p.dateCreated,
-        dateModified: p.dateModified,
-        type: p.pageType || p.type,
-        friendlyUrlPath: p.friendlyUrlPath,
-    }));
+    const items = sorted.slice(start, start + pageSize).map(p => {
+        // Resolve parent page title from parentSitePage
+        const parentPath = p.parentSitePage?.friendlyUrlPath;
+        const parentPage = parentPath ? allPages.find(pp => pp.friendlyUrlPath === parentPath) : null;
+        const parentPageTitle = parentPage ? (parentPage.title || parentPage.name || parentPath) : (parentPath || null);
+        return {
+            id: p.pageId || p.id,
+            title: p.title || p.name || '\u2014',
+            name: p.title || p.name || '\u2014',
+            creator: p.creator || { name: SYSTEM_AUTHOR_KEY },
+            dateCreated: p.dateCreated,
+            dateModified: p.dateModified,
+            type: p.pageType || p.type,
+            friendlyUrlPath: p.friendlyUrlPath,
+            parentPageTitle,
+            depth: p._depth || 1,
+        };
+    });
     return { items, totalCount };
 }
 
@@ -962,7 +1018,7 @@ export async function fetchFilteredDocuments(cfg, filter, page = 1, pageSize = 1
         id: d.id,
         title: d.title || d.name || '\u2014',
         name: d.title || d.name || '\u2014',
-        creator: d.creator || { name: 'Unknown' },
+        creator: d.creator || { name: SYSTEM_AUTHOR_KEY },
         dateCreated: d.dateCreated,
         dateModified: d.dateModified,
         encodingFormat: d.encodingFormat || d.mimeType || (d.fileExtension ? `.${d.fileExtension}` : null) || 'unknown',
@@ -982,8 +1038,8 @@ export async function fetchFilteredDocuments(cfg, filter, page = 1, pageSize = 1
  * @returns {object} Author detail with structures, pages, categories, totals
  */
 export function computeAuthorDetail(cache, authorName) {
-    const articles = (cache._articles || []).filter(a => (a.creator?.name || 'Unknown') === authorName);
-    const pages = (cache._pages || []).filter(p => (p.creator?.name || 'Unknown') === authorName);
+    const articles = (cache._articles || []).filter(a => resolveAuthorName(a.creator || a.author) === authorName);
+    const pages = (cache._pages || []).filter(p => resolveAuthorName(p.creator) === authorName);
     const structures = cache._structures || [];
 
     // ── Structures breakdown ──────────────────────────────────────────
@@ -1060,7 +1116,7 @@ export function fetchFilteredArticlesByAuthorAndStructure(cfg, authorName, struc
     const cache = getDataCache();
     const allArticles = cache._articles || [];
     const filtered = allArticles.filter(a => {
-        const authorMatch = (a.creator?.name || 'Unknown') === authorName;
+        const authorMatch = resolveAuthorName(a.creator || a.author) === authorName;
         const structMatch = (a.contentStructureId || (a.embedded && a.embedded.contentStructureId)) === structureId;
         return authorMatch && structMatch;
     });
@@ -1089,7 +1145,7 @@ export function fetchFilteredArticlesByAuthorAndCategory(cfg, authorName, catego
     const cache = getDataCache();
     const allArticles = cache._articles || [];
     const filtered = allArticles.filter(a => {
-        const authorMatch = (a.creator?.name || 'Unknown') === authorName;
+        const authorMatch = resolveAuthorName(a.creator || a.author) === authorName;
         const catMatch = (a.taxonomyCategoryBriefs || []).some(c => (c.taxonomyCategoryId || c.id) === categoryId);
         return authorMatch && catMatch;
     });
@@ -1185,7 +1241,7 @@ export function computeStaleContent(cache, limit = 5) {
                 structureName: structMap[a.contentStructureId] || '—',
                 dateModified: a.dateModified,
                 dateCreated: a.dateCreated,
-                author: a.creator?.name || 'Unknown',
+                author: resolveAuthorName(a.creator || a.author),
                 staleDays,
                 friendlyUrlPath: a.friendlyUrlPath || a.contentUrl || null,
             };
