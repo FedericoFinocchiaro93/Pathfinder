@@ -46,6 +46,14 @@ This is where Pathfinder AI truly shines. Every CRUD operation across your Lifer
 - **Manage Object entries** — full CRUD on all Object instances, regardless of scope
 - Pathfinder uses a dedicated `objectFieldBuilder` to handle complex field type combinations automatically
 
+#### 📊 Batch Creation from Excel
+- **Drag & drop Excel files** (.xlsx, .xls, .csv) directly into the chat — data is automatically parsed and presented in tabular format
+- **Generate Excel templates** — ask Pathfinder to create a blank template for structures, objects, vocabularies, pages, roles, or users, then fill it and upload
+- **Sequential batch creation** — the AI processes each row one at a time, creating entities in the correct order (e.g. parent pages before child pages)
+- **Progress tracking** — real-time progress messages during batch operations: ✅ per-type completion, 🎉 final summary with counts and errors
+- **Error resilience** — individual row errors don't stop the batch; the AI continues and reports a final error count
+- **Template sheets** — built-in templates in Italian and English for: Structures, Objects, Vocabularies, Pages, Roles, Users
+
 ---
 
 ### 🔍 Search & Discover — When You Need It
@@ -70,6 +78,26 @@ This is where Pathfinder AI truly shines. Every CRUD operation across your Lifer
 - **Liferay credentials stay in the browser** — never transmitted to third parties
 - **11 behavioral rule blocks** injected at runtime into the system prompt — covering communication, data integrity, multi-step flows, entity handling, Excel file handling, and known API limitations
 - **No telemetry** — zero data sent to external servers
+
+---
+
+### 👍👎 Feedback & Learning System
+- **Thumbs up/down** on every AI response — users rate response quality directly in the chat
+- **Auto-created Liferay Custom Object** (`ACPFeedback`) — the feedback object is created automatically when the feature is first enabled in settings
+- **Smart deduplication** — similar questions are grouped into a single record with an incremental **score** (👍 = +1, 👎 = -1), avoiding duplicate entries
+- **Tool call tracking** — every feedback record stores which Liferay tools were called to produce the answer
+- **RAG from positive feedback** — when a user asks a question, the system fetches the highest-rated Q&A pairs from the Custom Object and injects them into the system prompt as privileged context, so the LLM learns from previously approved answers
+- **Configurable** — the feedback feature can be enabled/disabled from the settings panel; when disabled, no feedback buttons appear and no RAG context is injected
+
+---
+
+### 📊 Content Analytics Dashboard
+- **Content statistics** — view counts of web content, documents, blog entries, and pages
+- **Author breakdown** — see who created what, with system-authored content labeled as "System"
+- **Timeline charts** — content creation over time with selectable ranges (3m, 6m, 12m, 24m)
+- **Site hierarchy** — browse pages by depth level with drill-down navigation and parent page info
+- **Compact bar charts** — automatic compact mode when displaying few data points
+- **i18n** — full Italian and English support for all analytics labels
 
 ---
 
@@ -130,13 +158,18 @@ Switch providers at any time from the settings ⚙ — the conversation continue
 | `llm/ollama.js` | Ollama local integration (streaming, tool use) |
 | `toolExecutor.js` | Execution of 30+ Liferay Headless tools |
 | `tools.js` | Tool definitions (Anthropic/Gemini/Ollama/OpenAI schemas) |
-| `prompts.js` | System prompt with 22 behavioral rules |
+| `excelTemplate.js` | Excel template generation and parsing for batch creation |
+| `prompts.js` | System prompt with 22 behavioral rules + feedback RAG context |
 | `config.js` | Configuration management (localStorage) |
+| `feedbackTracker.js` | Feedback tracking, deduplication, Liferay sync, RAG fetch |
+| `contentStats.js` | Content analytics data layer with DataCache |
 | `i18n.js` | Internationalization IT/EN |
 | `ConsentScreenFP.jsx` | Privacy consent screen (mandatory on first access) |
 | `EulaModalFP.jsx` | Full terms of use |
 | `ConfigPanelFP.jsx` | Settings panel (provider, models, colors) |
 | `UsagePanelFP.jsx` | Cost and token usage dashboard |
+| `ContentStatsPanelFP.jsx` | Content analytics dashboard |
+| `MessageBubbleFP.jsx` | Chat message bubble with feedback buttons |
 
 ---
 
@@ -213,6 +246,9 @@ Pathfinder AI automatically detects the browser language and supports:
 ### Chat History
 Conversation history can be saved on Liferay (enable it in settings) to resume chats where you left off.
 
+### Feedback & Learning
+When enabled in settings, users can rate AI responses with 👍/👎. Positive feedback is stored in a Liferay Custom Object and used as RAG context for future similar questions, so the LLM learns from previously approved answers over time. The system automatically deduplicates similar questions and increments a score counter instead of creating duplicate records.
+
 ---
 
 ## 📊 Cost Monitoring
@@ -233,7 +269,8 @@ Updated pricing for all providers: Anthropic, Gemini, OpenAI, DeepSeek, Mistral.
 - **Local credentials** — Liferay email and password stay in the browser, transmitted only to the portal
 - **Local API keys** — LLM provider keys are stored in localStorage
 - **No telemetry** — zero data sent to third-party servers
-- **LLM rules** — 12 behavioral rule blocks injected at runtime, preventing the AI from exposing technical details, inventing data, or bypassing operational constraints
+- **LLM rules** — 22 behavioral rule blocks injected at runtime, preventing the AI from exposing technical details, inventing data, or bypassing operational constraints
+- **Feedback RAG** — positively rated Q&A pairs are injected into the system prompt so the LLM learns from approved answers
 
 ---
 
@@ -255,7 +292,8 @@ ai-chatbot-fullpage/
 │   │       ├── EulaModalFP.jsx
 │   │       ├── MessageBubbleFP.jsx
 │   │       ├── ToolCallBubbleFP.jsx
-│   │       └── UsagePanelFP.jsx
+│   │       ├── UsagePanelFP.jsx
+│   │       └── ContentStatsPanelFP.jsx
 │   ├── hooks/
 │   │   ├── useAgentFP.js       # Conversational agent hook
 │   │   └── useChatHistory.js    # Chat history hook
@@ -270,9 +308,12 @@ ai-chatbot-fullpage/
 │   │   │   ├── openai.js        # OpenAI/DeepSeek/Mistral provider
 │   │   │   ├── router.js        # Multi-provider router
 │   │   │   └── llmUsageTracker.js # Cost tracking
-│   │   ├── prompts.js           # System prompt and rules
+│   │   ├── contentStats.js     # Content analytics data layer
+│   │   ├── feedbackTracker.js  # Feedback tracking & Liferay sync
+│   │   ├── prompts.js           # System prompt, rules & feedback RAG
 │   │   ├── tools.js             # Tool definitions
 │   │   ├── toolExecutor.js      # Tool execution
+│   │   ├── excelTemplate.js     # Excel template generation & parsing
 │   │   ├── cache.js             # Response cache
 │   │   ├── objectFieldBuilder.js # Object Definition builder
 │   │   ├── objectManager.js     # Object Definition management
