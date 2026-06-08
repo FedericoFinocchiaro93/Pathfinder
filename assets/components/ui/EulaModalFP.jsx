@@ -53,6 +53,11 @@ function EulaModalFP({ t, onClose }) {
                         <h3>{t.eulaSection7Title}</h3>
                         <p>{t.eulaSection7Text}</p>
                     </div>
+
+                    <div className="afp-eula-section">
+                        <h3>{t.eulaSection8Title}</h3>
+                        <p>{t.eulaSection8Text}</p>
+                    </div>
                 </div>
 
                 <div className="afp-eula-footer">

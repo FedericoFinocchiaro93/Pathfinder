@@ -370,6 +370,7 @@ function ContentStatsPanelFP({ cfg, onBack, t }) {
     const [contentGaps, setContentGaps] = useState(null);
     const [staleContent, setStaleContent] = useState([]);
     const [alerts, setAlerts] = useState([]);
+    const [qualityFilter, setQualityFilter] = useState(null); // 'healthy' | 'warning' | 'critical' | null
     const [timelineMonths, setTimelineMonths] = useState(12);
     const PAGE_SIZE = 10;
 
@@ -857,30 +858,93 @@ function ContentStatsPanelFP({ cfg, onBack, t }) {
                     </div>
                 )}
 
-                {/* Health */}
-                {insights?.health && (
-                    <div className={secCls('health')}>
-                        <h3>{t.statsHealthTitle || 'Content Health Score'}</h3>
+                {/* Quality Score */}
+                {insights?.quality && (
+                    <div className={secCls('quality')}>
+                        <h3>{t.statsQualityTitle || 'Content Quality Score'}</h3>
                         <div className="afp-stats-health-row">
-                            <HealthGauge score={insights.health.score} size={140} />
-                            <div className="afp-stats-health-indicators">
+                            <HealthGauge score={insights.quality.score} size={140} />
+                            <div className="afp-stats-quality-distribution">
                                 {[
-                                    { key: 'noCategories', label: t.statsHealthNoCategories || 'Without Categories', ...insights.health.noCategories, color: '#ef4444' },
-                                    { key: 'noKeywords', label: t.statsHealthNoKeywords || 'Without Tags', ...insights.health.noKeywords, color: '#f97316' },
-                                    { key: 'stale', label: t.statsHealthStale || 'Stale (>90 days)', ...insights.health.stale, color: '#64748b' },
-                                    ...(insights.health.noReviewDate ? [{ key: 'noReviewDate', label: t.statsHealthNoReviewDate || 'No Review Date', ...insights.health.noReviewDate, color: '#8b5cf6' }] : []),
-                                ].map(ind => (
-                                    <div key={ind.key} className="afp-stats-health-ind afp-stats-tilt" style={{ cursor: 'pointer' }}
-                                        onClick={() => openDrillDown('health', ind.key, `${t.statsHealthTitle || 'Health'}: ${ind.label}`, 'health')}>
-                                        <span className="afp-stats-health-dot" style={{ background: ind.color }} />
-                                        <span className="afp-stats-health-label">{ind.label}</span>
-                                        <span className="afp-stats-health-val">{ind.count}</span>
-                                        <span className="afp-stats-health-pct">{ind.pct}%</span>
+                                    { key: 'healthy', label: t.statsQualityHealthy || 'Healthy (70-100)', count: insights.quality.distribution.healthy, color: '#22c55e', emoji: '🟢' },
+                                    { key: 'warning', label: t.statsQualityWarning || 'Warning (40-69)', count: insights.quality.distribution.warning, color: '#f59e0b', emoji: '🟡' },
+                                    { key: 'critical', label: t.statsQualityCritical || 'Critical (0-39)', count: insights.quality.distribution.critical, color: '#ef4444', emoji: '🔴' },
+                                ].map(bucket => (
+                                    <div key={bucket.key}
+                                        className="afp-stats-quality-dist-row afp-stats-tilt"
+                                        style={{ cursor: bucket.count > 0 ? 'pointer' : 'default', opacity: bucket.count > 0 ? 1 : 0.4 }}
+                                        onClick={() => {
+                                            if (bucket.count === 0) return;
+                                            setQualityFilter(bucket.key);
+                                            closeDrillDown();
+                                        }}>
+                                        <span className="afp-stats-quality-dot">{bucket.emoji}</span>
+                                        <span className="afp-stats-quality-label">{bucket.label}</span>
+                                        <span className="afp-stats-quality-val">{bucket.count}</span>
                                     </div>
                                 ))}
                             </div>
                         </div>
-                        {ds === 'health' && renderDrillDown()}
+
+                        {/* Quality detail: either filter view or summary */}
+                        {qualityFilter ? (
+                            /* ── Filtered article list ── */
+                            <div className="afp-stats-quality-detail">
+                                <div className="afp-stats-quality-detail-header">
+                                    <h4>{qualityFilter === 'healthy' ? (t.statsQualityHealthy || 'Healthy (70-100)') : qualityFilter === 'warning' ? (t.statsQualityWarning || 'Warning (40-69)') : (t.statsQualityCritical || 'Critical (0-39)')} — {insights.quality.articleScores.filter(s => qualityFilter === 'healthy' ? s.normalizedScore >= 70 : qualityFilter === 'warning' ? s.normalizedScore >= 40 && s.normalizedScore < 70 : s.normalizedScore < 40).length} {t.statsArticles?.toLowerCase() || 'articles'}</h4>
+                                    <button className="afp-stats-struct-close" onClick={() => setQualityFilter(null)}><Icon d={Icons.close} size={16} /></button>
+                                </div>
+                                <div className="afp-stats-article-table-wrap">
+                                    <table className="afp-stats-article-table afp-stats-quality-table">
+                                        <thead><tr>
+                                            <th>{t.statsColTitle || 'Title'}</th>
+                                            <th>{t.statsQualityScore || 'Score'}</th>
+                                            {insights.quality.criteria.map(c => {
+                                                const descKey = `statsQualityDesc${c.key.charAt(0).toUpperCase()}${c.key.slice(1)}`;
+                                                const tooltip = t[descKey] || c.description || c.label;
+                                                return (
+                                                    <th key={c.key} className="afp-stats-quality-th-criterion" title={tooltip}>{c.label.replace('Has ', '').replace('SEO-Friendly ', '').replace('Recently ', '').replace('Content ', '')}</th>
+                                                );
+                                            })}
+                                            <th className="afp-stats-th-actions"></th>
+                                        </tr></thead>
+                                        <tbody>
+                                            {insights.quality.articleScores
+                                                .filter(s => qualityFilter === 'healthy' ? s.normalizedScore >= 70 : qualityFilter === 'warning' ? s.normalizedScore >= 40 && s.normalizedScore < 70 : s.normalizedScore < 40)
+                                                .sort((a, b) => b.normalizedScore - a.normalizedScore)
+                                                .map((s, i) => {
+                                                    const scoreColor = s.normalizedScore >= 70 ? '#22c55e' : s.normalizedScore >= 40 ? '#f59e0b' : '#ef4444';
+                                                    const friendlyUrl = (s.friendlyUrlPath || '').replace(/^\/+/, '');
+                                                    const contentUrl = friendlyUrl ? `${cfg.liferayUrl || ''}/web/guest/-/${friendlyUrl}` : null;
+                                                    return (
+                                                        <tr key={s.id || i}>
+                                                            <td className="afp-stats-cell-title">{s.title || '\u2014'}</td>
+                                                            <td><span className="afp-stats-quality-score-badge" style={{ background: scoreColor + '18', color: scoreColor, borderColor: scoreColor + '40' }}>{s.normalizedScore}</span></td>
+                                                            {insights.quality.criteria.map(c => {
+                                                                const passed = s.breakdown[c.key] > 0;
+                                                                return (
+                                                                    <td key={c.key} className="afp-stats-quality-td-dot" title={passed ? `✓ ${c.label}` : `✗ ${c.label}`}>
+                                                                        <span className={`afp-stats-quality-dot-indicator ${passed ? 'afp-stats-quality-dot-pass' : 'afp-stats-quality-dot-fail'}`}>
+                                                                            {passed ? '●' : '○'}
+                                                                        </span>
+                                                                    </td>
+                                                                );
+                                                            })}
+                                                            <td className="afp-stats-td-actions">
+                                                                {contentUrl && (
+                                                                    <a href={contentUrl} target="_blank" rel="noopener noreferrer" className="afp-stats-action-link" title={t.statsViewPage || 'View'}>
+                                                                        <Icon d={Icons.eye} size={16} />
+                                                                    </a>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        ) : null}
                     </div>
                 )}
 
@@ -1259,10 +1323,10 @@ function ContentStatsPanelFP({ cfg, onBack, t }) {
                     {alerts.map(a => (
                         <div key={a.key} className={`afp-stats-alert afp-stats-alert-${a.severity}`}
                             onClick={() => {
-                                if (a.key === 'noCategories') openDrillDown('health', 'noCategories', `${t.statsHealthTitle || 'Health'}: ${a.label}`, 'health');
-                                else if (a.key === 'noKeywords') openDrillDown('health', 'noKeywords', `${t.statsHealthTitle || 'Health'}: ${a.label}`, 'health');
-                                else if (a.key === 'stale') openDrillDown('freshness', 'stale', `${t.statsFreshnessTitle || 'Freshness'}: ${a.label}`, 'freshness');
-                                else if (a.key === 'noReviewDate') openDrillDown('health', 'noReviewDate', `${t.statsHealthTitle || 'Health'}: ${a.label}`, 'health');
+                                if (a.key === 'noCategories' || a.key === 'noKeywords' || a.key === 'noReviewDate') {
+                                    setQualityFilter('warning');
+                                    closeDrillDown();
+                                } else if (a.key === 'stale') openDrillDown('freshness', 'stale', `${t.statsFreshnessTitle || 'Freshness'}: ${a.label}`, 'freshness');
                                 else if (a.key === 'hiddenPages') openDrillDown('pageHealth', 'hidden', `${t.statsPageHealthTitle || 'Page Health'}: ${a.label}`, 'pageHealth');
                             }}>
                             <span className="afp-stats-alert-count">{a.count}</span>

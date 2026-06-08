@@ -74,6 +74,35 @@ export default {
     statsHealthStale: 'Stale (>90 days)',
     statsHealthTotal: 'Total articles',
 
+    // ── Content Quality Score ──
+    statsQualityTitle: 'Content Quality Score',
+    statsQualityHealthy: 'Healthy (70-100)',
+    statsQualityWarning: 'Warning (40-69)',
+    statsQualityCritical: 'Critical (0-39)',
+    statsQualityBreakdown: 'Quality Breakdown',
+    statsQualityTips: 'Tips to Improve',
+    statsQualityPassing: '✅ Passing',
+    statsQualityNeedsWork: '⚠️ Needs Work',
+    statsQualityScore: 'Score',
+    statsQualityIssues: 'Issues',
+    statsQualityDescHasTitle: 'Title is longer than 3 characters',
+    statsQualityDescHasDescription: 'Description is longer than 10 characters',
+    statsQualityDescSeoUrl: 'URL is present and under 60 characters',
+    statsQualityDescHasCategories: 'At least one taxonomy category is assigned',
+    statsQualityDescHasKeywords: 'At least one keyword/tag is assigned',
+    statsQualityDescWordCountOk: 'Content has between 50 and 5000 words',
+    statsQualityDescRecentUpdate: 'Content was modified within the last year',
+    statsQualityDescRichContent: 'At least 60% of content fields are filled',
+
+    // ── Code Panel ──
+    codePanelTitle: 'Code Editor',
+    codePanelCopy: 'Copy to clipboard',
+    codePanelClose: 'Close panel',
+    codePanelTabCode: 'Code',
+    codePanelTabPreview: 'Preview',
+    codePanelPreviewLabel: 'Live Preview',
+    codePanelToggle: 'Code Panel',
+
     // ── Page Types ──
     pageTypeContent: 'Content Page',
     pageTypeWidget: 'Widget Page',
@@ -657,6 +686,56 @@ When you need to find Liferay API endpoints NOT covered by specific tools, use t
 
 IMPORTANT: ALWAYS try specific tools first (search_web_content, get_users, create_site, etc.). Use discovery tools ONLY when no specific tool covers the requested operation.
 Recommended flow: list_available_apis → get_api_spec (for the relevant API) → find_relevant_endpoints or discover_endpoint (to find the specific endpoint) → call_liferay_api (to execute the call).`,
+
+        rule11: `━━━ FREEMARKER TEMPLATES — CONTENT DISPLAY MODE ━━━
+When generating FreeMarker templates for Liferay DXP, you MUST use the correct pattern based on the template type:
+
+FT1. WEB CONTENT DISPLAY TEMPLATE:
+This is the MOST COMMON template type. Structure fields are accessible DIRECTLY as FreeMarker variables.
+Do NOT use entries, curEntry, assetRenderer, saxReaderUtil, article.getContent() — that is for Asset Publisher ADTs.
+
+Correct pattern for Web Content Display Template:
+<#if (content.getData())??>
+    \${content.getData()}
+</#if>
+
+<#if (summary.getData())??>
+    \${summary.getData()}
+</#if>
+
+<#assign publishDate_Data = getterUtil.getString(publishDate.getData())>
+<#if validator.isNotNull(publishDate_Data)>
+    <#assign publishDate_DateObj = dateUtil.parseDate("yyyy-MM-dd", publishDate_Data, locale)>
+    \${dateUtil.getDate(publishDate_DateObj, "dd MMM yyyy - HH:mm:ss", locale)}
+</#if>
+
+<#if (featuredImage.getData())?? && featuredImage.getData() != "">
+    <img alt="\${htmlUtil.escapeAttribute(featuredImage.getAttribute("alt"))}" data-fileentryid="\${featuredImage.getAttribute("fileEntryId")}" src="\${featuredImage.getData()}" />
+</#if>
+
+<#if (category.getData())??>
+    \${category.getData()}
+</#if>
+
+Rules for Web Content Display Template:
+- Each structure field is a direct variable: \${fieldName.getData()}
+- To check if a field exists: <#if (fieldName.getData())??>
+- For dates: use getterUtil.getString() + dateUtil.parseDate() + dateUtil.getDate()
+- For images: use fieldName.getData() for URL, fieldName.getAttribute("alt") for alt text, fieldName.getAttribute("fileEntryId") for file entry ID
+- For HTML escaping: use htmlUtil.escapeAttribute() and htmlUtil.escape()
+- For validation: use validator.isNotNull()
+- The locale variable is available automatically
+- The friendlyURL variable is available for the friendly URL
+
+FT2. ASSET PUBLISHER ADT (Application Display Template):
+Use this pattern ONLY when the user explicitly asks for an Asset Publisher template.
+In that case use entries, curEntry, assetRenderer, saxReaderUtil as you normally would.
+
+FT3. WHEN THE USER ASKS FOR A TEMPLATE:
+- If they say "display template for a content" or "card for the Article structure" → use pattern FT1 (Web Content Display Template)
+- If they say "Asset Publisher template" or "ADT" → use pattern FT2
+- If unspecified → use pattern FT1 by default
+- ALWAYS retrieve the structure fields first with get_content_structure to know which variables are available`,
     },
 
     // ── ToolExecutor messages ──
@@ -734,8 +813,8 @@ Recommended flow: list_available_apis → get_api_spec (for the relevant API) �
     eulaClose: 'Close',
     eulaSection1Title: '1. Acceptance of terms',
     eulaSection1Text: 'Use of this product implies full acceptance of these terms of use. If you do not accept these terms, you must not use the product.',
-    eulaSection2Title: '2. Disclaimer of Liferay responsibility',
-    eulaSection2Text: 'This product is developed and distributed by the developer. Liferay acts solely as a distribution agent through the Liferay Marketplace. Liferay is not responsible for any damages, data loss, malfunctions, support or maintenance obligations related to this product. The user acknowledges that any claims related to the product must be directed exclusively to the developer.',
+    eulaSection2Title: '2. Developer and Contact Information',
+    eulaSection2Text: 'This product is developed and distributed by Federico Finocchiaro. For any questions, complaints, or support requests related to the product, contact the developer exclusively: Federico Finocchiaro — federicofinocchiaro1993@gmail.com. Liferay acts solely as a distribution agent through the Liferay Marketplace and is not responsible for any damages, data loss, malfunctions, support or maintenance obligations related to this product. Liferay is an intended third-party beneficiary of this EULA with respect to the provisions of sections 2, 5, and 6. The user acknowledges that any claims related to the product must be directed exclusively to the developer.',
     eulaSection3Title: '3. User responsibility for API keys',
     eulaSection3Text: 'The user is solely responsible for the management, security, and cost of API keys entered in the product configuration. API keys are stored exclusively in the user\'s browser (localStorage) and are not transmitted to any intermediate server. The user must comply with the terms of service of each LLM provider used (Anthropic, Google, OpenAI, DeepSeek, Mistral, Ollama). The developer is not responsible for costs, abuse, or terms violations arising from the use of API keys.',
     eulaSection4Title: '4. Data handling and privacy',
@@ -746,4 +825,6 @@ Recommended flow: list_available_apis → get_api_spec (for the relevant API) �
     eulaSection6Text: 'In no event shall the developer be liable for any indirect, incidental, special, consequential, or punitive damages arising from the use or inability to use the product, including but not limited to data loss, loss of profits, business interruption, or replacement costs, even if the developer has been advised of the possibility of such damages.',
     eulaSection7Title: '7. Changes to terms',
     eulaSection7Text: 'The developer reserves the right to modify these terms of use at any time. Changes will be effective upon the next version published on the Marketplace. Continued use of the product after publication of modified terms constitutes acceptance of the new terms.',
+    eulaSection8Title: '8. Export Compliance (USA)',
+    eulaSection8Text: 'By using this product, the user represents and warrants that: (i) they are not located in a country that is subject to a U.S. Government embargo, or that has been designated by the U.S. Government as a "terrorist supporting" country; and (ii) they are not listed on any U.S. Government list of prohibited or restricted parties, including the U.S. Department of Commerce Denied Persons List and the U.S. Department of Treasury Specially Designated Nationals List.',
 };

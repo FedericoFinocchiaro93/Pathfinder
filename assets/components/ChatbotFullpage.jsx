@@ -56,6 +56,7 @@ import ContentStatsPanelFP from './ui/ContentStatsPanelFP.jsx';
 import ConsentScreenFP, { hasConsented } from './ui/ConsentScreenFP.jsx';
 import EulaModalFP      from './ui/EulaModalFP.jsx';
 import DocumentPicker    from './ui/DocumentPicker.jsx';
+import CodePanelFP      from './ui/CodePanelFP.jsx';
 import { fetchOllamaModels } from '../lib/llm/ollama.js';
 import { fetchOpenAIModels } from '../lib/llm/openai.js';
 import { resetSession as resetUsageSession } from '../lib/llmUsageTracker.js';
@@ -132,6 +133,10 @@ export default function ChatbotFullpage() {
     const [isDragOver, setIsDragOver] = useState(false);
     const [showModelMenu, setShowModelMenu] = useState(false);
     const [dynamicModels, setDynamicModels] = useState([]); // for Ollama / OpenAI-compat
+    const [codePanelOpen, setCodePanelOpen] = useState(false);
+    const [codePanelCode, setCodePanelCode] = useState('');
+    const [codePanelLang, setCodePanelLang] = useState('');
+    const [codePanelWidth, setCodePanelWidth] = useState(50); // percentage
     const modelMenuRef = useRef(null);
     const t = getDictionary(locale);
     const supportedLocales = getSupportedLocales();
@@ -447,7 +452,47 @@ export default function ChatbotFullpage() {
         setShowConfig(false);
         setShowUsage(false);
         setShowStats(false);
+        setCodePanelOpen(false);
+        setCodePanelCode('');
+        setCodePanelLang('');
     }, [chatHistory]);
+
+    const handleOpenCode = useCallback((code, lang) => {
+        setCodePanelCode(code);
+        setCodePanelLang(lang);
+        setCodePanelOpen(true);
+    }, []);
+
+    const handleCloseCodePanel = useCallback(() => {
+        setCodePanelOpen(false);
+    }, []);
+
+    // ── Draggable splitter for code panel ────────────────────────────────
+    const splitDragRef = useRef(null);
+    const handleSplitMouseDown = useCallback((e) => {
+        e.preventDefault();
+        const startX = e.clientX;
+        const startWidth = codePanelWidth;
+        const container = e.currentTarget.parentElement;
+        const containerRect = container.getBoundingClientRect();
+
+        const handleMouseMove = (moveEvent) => {
+            const dx = startX - moveEvent.clientX; // dragging left = panel gets wider
+            const totalWidth = containerRect.width;
+            const newPct = Math.min(70, Math.max(25, startWidth + (dx / totalWidth) * 100));
+            setCodePanelWidth(newPct);
+        };
+        const handleMouseUp = () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        };
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    }, [codePanelWidth]);
 
     const handleRegenerate = useCallback((sourceQuery) => {
         if (!sourceQuery || busy) return;
@@ -823,6 +868,12 @@ export default function ChatbotFullpage() {
                         </div>
                     </div>
                     <div className="afp-header-actions">
+                        {/* Code Panel toggle */}
+                        {codePanelCode && (
+                            <button className={`afp-header-btn${codePanelOpen ? ' afp-header-btn-active' : ''}`} title={t.codePanelToggle || 'Code Panel'} onClick={() => setCodePanelOpen(v => !v)}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                            </button>
+                        )}
                         {/* Language selector */}
                         <select className="afp-lang-select" value={locale} onChange={(e) => { setLocale(e.target.value); setLocaleState(e.target.value); }} title="Language / Lingua">
                             {supportedLocales.map((loc) => (
@@ -833,30 +884,50 @@ export default function ChatbotFullpage() {
                     </div>
                 </div>
 
-                {/* Messaggi o Welcome */}
-                {!hasMessages ? (
-                    /* Welcome screen */
-                    <div className="afp-messages">
-                        <div className="afp-welcome">
-                            <h2>{t.welcomeTitle}</h2>
-                            <p className="afp-welcome-sub">
-                                {t.welcomeSubtitle}
-                            </p>
-                        </div>
+                {/* Split layout: Chat + Code Panel */}
+                <div className={`afp-split-layout${codePanelOpen ? ' afp-split-layout-open' : ''}`}>
+                    {/* Chat area */}
+                    <div className="afp-chat-panel">
+                        {!hasMessages ? (
+                            /* Welcome screen */
+                            <div className="afp-messages">
+                                <div className="afp-welcome">
+                                    <h2>{t.welcomeTitle}</h2>
+                                    <p className="afp-welcome-sub">
+                                        {t.welcomeSubtitle}
+                                    </p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="afp-messages">
+                                {messages.map((msg) => (
+                                    <MessageBubbleFP
+                                        key={msg.id}
+                                        msg={msg}
+                                        onRegenerate={handleRegenerate}
+                                        cfg={cfg}
+                                        onOpenCode={handleOpenCode}
+                                    />
+                                ))}
+                                <div ref={messagesEndRef} />
+                            </div>
+                        )}
                     </div>
-                ) : (
-                    <div className="afp-messages">
-                        {messages.map((msg) => (
-                            <MessageBubbleFP
-                                key={msg.id}
-                                msg={msg}
-                                onRegenerate={handleRegenerate}
-                                cfg={cfg}
-                            />
-                        ))}
-                        <div ref={messagesEndRef} />
-                    </div>
-                )}
+
+                    {/* Code Panel (right side) */}
+                    {codePanelOpen && (
+                        <>
+                            <div className="afp-split-handle" onMouseDown={handleSplitMouseDown} title="Drag to resize" />
+                            <div className="afp-code-panel-wrapper" style={{ flex: `0 0 ${codePanelWidth}%` }}>
+                                <CodePanelFP
+                                    code={codePanelCode}
+                                    language={codePanelLang}
+                                    onClose={handleCloseCodePanel}
+                                />
+                            </div>
+                        </>
+                    )}
+                </div>
 
                 {/* Input bar */}
                 <div className="afp-input-area">

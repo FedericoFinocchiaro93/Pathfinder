@@ -238,6 +238,50 @@ export async function liferayUploadDocument(baseUrl, siteId, file, fileName, tit
 }
 
 /**
+ * Create a DDM template via JSON-WS (form-encoded POST to /api/jsonws/ddm.ddmtemplate/add-template)
+ * Expects FreeMarker script in `script` and returns the created template object on success.
+ */
+export async function createDDMTemplateViaJsonWS({ baseUrl, groupId, classNameId, classPK, resourceClassNameId, name, description = '', script, type = 'display', language = 'ftl', serviceContext = null, user, pass }) {
+    const token = getLiferayToken();
+    const locale = (window.Liferay && window.Liferay.ThemeDisplay && window.Liferay.ThemeDisplay.getLanguageId && window.Liferay.ThemeDisplay.getLanguageId()) || 'en_US';
+
+    const svc = serviceContext || { scopeGroupId: Number(groupId) };
+
+    const params = new URLSearchParams();
+    if (token) params.append('p_auth', token);
+    params.append('externalReferenceCode', '');
+    params.append('groupId', String(groupId));
+    params.append('classNameId', String(classNameId));
+    params.append('classPK', String(classPK));
+    params.append('resourceClassNameId', String(resourceClassNameId));
+    params.append('nameMap', JSON.stringify({ [locale]: name }));
+    params.append('descriptionMap', JSON.stringify({ [locale]: description }));
+    params.append('type', String(type));
+    params.append('mode', '');
+    params.append('language', String(language));
+    params.append('script', script || '');
+    params.append('serviceContext', JSON.stringify(svc));
+
+    const url = baseUrl.replace(/\/$/, '') + '/api/jsonws/ddm.ddmtemplate/add-template';
+    const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+    if (user && pass) {
+        headers['Authorization'] = 'Basic ' + btoa(user + ':' + pass);
+    } else if (token) {
+        headers['x-csrf-token'] = token;
+    }
+
+    dbg('JSONWS add-template', url, { groupId, classNameId, classPK, resourceClassNameId });
+
+    const res = await fetch(url, { method: 'POST', credentials: 'same-origin', headers, body: params.toString() });
+    if (!res.ok) {
+        const bodyText = await res.text().catch(() => '');
+        throw new Error(`JSONWS add-template failed: HTTP ${res.status} ${res.statusText} — ${bodyText.substring(0, 2000)}`);
+    }
+    // JSON-WS returns JSON
+    return res.json();
+}
+
+/**
  * Find a document folder by name under a parent folder (or site root).
  * Returns the folder object or null if not found.
  */

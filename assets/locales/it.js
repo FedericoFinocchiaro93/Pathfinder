@@ -74,6 +74,35 @@ export default {
     statsHealthStale: 'Obsoleti (>90 giorni)',
     statsHealthTotal: 'Articoli totali',
 
+    // ── Punteggio Qualità Contenuti ──
+    statsQualityTitle: 'Punteggio Qualità Contenuti',
+    statsQualityHealthy: 'Buono (70-100)',
+    statsQualityWarning: 'Attenzione (40-69)',
+    statsQualityCritical: 'Critico (0-39)',
+    statsQualityBreakdown: 'Dettaglio Qualità',
+    statsQualityTips: 'Suggerimenti per Migliorare',
+    statsQualityPassing: '✅ Superati',
+    statsQualityNeedsWork: '⚠️ Da Migliorare',
+    statsQualityScore: 'Punteggio',
+    statsQualityIssues: 'Problemi',
+    statsQualityDescHasTitle: 'Il titolo è più lungo di 3 caratteri',
+    statsQualityDescHasDescription: 'La descrizione è più lunga di 10 caratteri',
+    statsQualityDescSeoUrl: 'L\'URL è presente e sotto i 60 caratteri',
+    statsQualityDescHasCategories: 'Almeno una categoria tassonomica è assegnata',
+    statsQualityDescHasKeywords: 'Almeno una keyword/tag è assegnata',
+    statsQualityDescWordCountOk: 'Il contenuto ha tra 50 e 5000 parole',
+    statsQualityDescRecentUpdate: 'Il contenuto è stato modificato nell\'ultimo anno',
+    statsQualityDescRichContent: 'Almeno il 60% dei campi è compilato',
+
+    // ── Pannello Codice ──
+    codePanelTitle: 'Editor Codice',
+    codePanelCopy: 'Copia negli appunti',
+    codePanelClose: 'Chiudi pannello',
+    codePanelTabCode: 'Codice',
+    codePanelTabPreview: 'Anteprima',
+    codePanelPreviewLabel: 'Anteprima Live',
+    codePanelToggle: 'Pannello Codice',
+
     // ── Tipi di Pagina ──
     pageTypeContent: 'Pagina contenuto',
     pageTypeWidget: 'Pagina widget',
@@ -657,6 +686,56 @@ Quando devi trovare endpoint API Liferay NON coperti dai tool specifici, usa i t
 
 IMPORTANTE: usa SEMPRE prima i tool specifici (search_web_content, get_users, create_site, ecc.). Usa i tool di discovery SOLO quando nessun tool specifico copre l'operazione richiesta.
 Flusso consigliato: list_available_apis → get_api_spec (per l'API rilevante) → find_relevant_endpoints o discover_endpoint (per trovare l'endpoint specifico) → call_liferay_api (per eseguire la chiamata).`,
+
+        rule11: `━━━ TEMPLATE FREEMARKER — MODALITÀ DI VISUALIZZAZIONE CONTENUTO ━━━
+Quando generi template FreeMarker per Liferay DXP, DEVI usare il pattern corretto in base al tipo di template:
+
+FT1. WEB CONTENT DISPLAY TEMPLATE (Modello di Visualizzazione Contenuto):
+Questo è il tipo PIÙ COMUNE di template. I campi della struttura sono accessibili DIRETTAMENTE come variabili FreeMarker.
+NON usare entries, curEntry, assetRenderer, saxReaderUtil, article.getContent() — quello è per gli Asset Publisher ADT.
+
+Pattern corretto per Web Content Display Template:
+<#if (content.getData())??>
+    \${content.getData()}
+</#if>
+
+<#if (summary.getData())??>
+    \${summary.getData()}
+</#if>
+
+<#assign publishDate_Data = getterUtil.getString(publishDate.getData())>
+<#if validator.isNotNull(publishDate_Data)>
+    <#assign publishDate_DateObj = dateUtil.parseDate("yyyy-MM-dd", publishDate_Data, locale)>
+    \${dateUtil.getDate(publishDate_DateObj, "dd MMM yyyy - HH:mm:ss", locale)}
+</#if>
+
+<#if (featuredImage.getData())?? && featuredImage.getData() != "">
+    <img alt="\${htmlUtil.escapeAttribute(featuredImage.getAttribute("alt"))}" data-fileentryid="\${featuredImage.getAttribute("fileEntryId")}" src="\${featuredImage.getData()}" />
+</#if>
+
+<#if (category.getData())??>
+    \${category.getData()}
+</#if>
+
+Regole per Web Content Display Template:
+- Ogni campo della struttura è una variabile diretta: \${fieldName.getData()}
+- Per verificare se un campo esiste: <#if (fieldName.getData())??>
+- Per le date: usa getterUtil.getString() + dateUtil.parseDate() + dateUtil.getDate()
+- Per le immagini: usa fieldName.getData() per l'URL, fieldName.getAttribute("alt") per l'alt text, fieldName.getAttribute("fileEntryId") per il file entry ID
+- Per escape HTML: usa htmlUtil.escapeAttribute() e htmlUtil.escape()
+- Per validazione: usa validator.isNotNull()
+- La variabile locale è disponibile automaticamente
+- La variabile friendlyURL è disponibile per l'URL amichevole
+
+FT2. ASSET PUBLISHER ADT (Application Display Template):
+Usa questo pattern SOLO se l'utente chiede esplicitamente un template per l'Asset Publisher.
+In questo caso usa entries, curEntry, assetRenderer, saxReaderUtil come faresti normalmente.
+
+FT3. QUANDO L'UTENTE CHIEDE UN TEMPLATE:
+- Se dice "template per la visualizzazione di un contenuto" o "card per la struttura Article" → usa il pattern FT1 (Web Content Display Template)
+- Se dice "template per l'Asset Publisher" o "ADT" → usa il pattern FT2
+- Se non specifica → usa il pattern FT1 di default
+- SEMPRE recupera prima i campi della struttura con get_content_structure per sapere quali variabili sono disponibili`,
     },
 
     // ── ToolExecutor messages ──
@@ -734,8 +813,8 @@ Flusso consigliato: list_available_apis → get_api_spec (per l'API rilevante) �
     eulaClose: 'Chiudi',
     eulaSection1Title: '1. Accettazione dei termini',
     eulaSection1Text: 'L\'uso di questo prodotto implica l\'accettazione completa dei presenti termini d\'uso. Se non si accettano questi termini, non si deve utilizzare il prodotto.',
-    eulaSection2Title: '2. Esclusione di responsabilità di Liferay',
-    eulaSection2Text: 'Questo prodotto è sviluppato e distribuito dallo sviluppatore. Liferay agisce esclusivamente come agente di distribuzione tramite il Liferay Marketplace. Liferay non è responsabile per qualsiasi danno, perdita di dati, malfunzionamento, obbligo di supporto o manutenzione relativo a questo prodotto. L\'utente riconosce che qualsiasi reclamo relativo al prodotto deve essere rivolto esclusivamente allo sviluppatore.',
+    eulaSection2Title: '2. Sviluppatore e contatti',
+    eulaSection2Text: 'Questo prodotto è sviluppato e distribuito da Federico Finocchiaro. Per qualsiasi domanda, reclamo o richiesta di supporto relativa al prodotto, contattare esclusivamente lo sviluppatore: Federico Finocchiaro — federicofinocchiaro1993@gmail.com. Liferay agisce esclusivamente come agente di distribuzione tramite il Liferay Marketplace e non è responsabile per qualsiasi danno, perdita di dati, malfunzionamento, obbligo di supporto o manutenzione relativo a questo prodotto. Liferay è un beneficiario terzo intenzionale della presente EULA con riguardo alle disposizioni di cui alle sezioni 2, 5 e 6. L\'utente riconosce che qualsiasi reclamo relativo al prodotto deve essere rivolto esclusivamente allo sviluppatore.',
     eulaSection3Title: '3. Responsabilità dell\'utente per le API key',
     eulaSection3Text: 'L\'utente è il solo responsabile della gestione, sicurezza e costo delle API key inserite nella configurazione del prodotto. Le API key vengono memorizzate esclusivamente nel browser dell\'utente (localStorage) e non vengono trasmesse a nessun server intermedio. L\'utente deve rispettare i termini di servizio di ciascun provider LLM utilizzato (Anthropic, Google, OpenAI, DeepSeek, Mistral, Ollama). Lo sviluppatore non è responsabile per costi, abusi o violazioni dei termini derivanti dall\'uso delle API key.',
     eulaSection4Title: '4. Trattamento dei dati e privacy',
@@ -746,4 +825,6 @@ Flusso consigliato: list_available_apis → get_api_spec (per l'API rilevante) �
     eulaSection6Text: 'In nessun caso lo sviluppatore sarà responsabile per danni indiretti, incidentali, speciali, consequenziali o punitivi derivanti dall\'uso o dall\'impossibilità di uso del prodotto, inclusi ma non limitati a perdita di dati, perdita di profitti, interruzione di attività o costi di sostituzione, anche se lo sviluppatore è stato avvisato della possibilità di tali danni.',
     eulaSection7Title: '7. Modifiche ai termini',
     eulaSection7Text: 'Lo sviluppatore si riserva il diritto di modificare i presenti termini d\'uso in qualsiasi momento. Le modifiche saranno efficaci dalla prossima versione pubblicata sul Marketplace. L\'uso continuato del prodotto dopo la pubblicazione di termini modificati costituisce accettazione dei nuovi termini.',
+    eulaSection8Title: '8. Conformità alle normative export (USA)',
+    eulaSection8Text: 'Utilizzando questo prodotto, l\'utente dichiara e garantisce che: (i) non si trova in un paese soggetto a embargo del governo degli Stati Uniti d\'America o che sia stato designato dal governo USA come paese che supporta il terrorismo; e (ii) non è inserito in alcuna lista del governo USA di soggetti vietati o con restrizioni, inclusi la Denied Persons List del Dipartimento del Commercio USA e la Specially Designated Nationals List del Dipartimento del Tesoro USA.',
 };

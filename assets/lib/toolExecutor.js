@@ -5,7 +5,7 @@
 
 import { dbg } from './utils.js';
 import {
-    liferayGet, liferayPost, liferayPut, liferayPatch, liferayDelete, liferayUploadDocument, getBaseUrl, getSiteId,
+    liferayGet, liferayPost, liferayPut, liferayPatch, liferayDelete, liferayUploadDocument, createDDMTemplateViaJsonWS, getBaseUrl, getSiteId,
     buildKeywordFilter, encodeFilter,
     parseStructuredContentItem,
     fetchApiList, fetchApiSpec,
@@ -353,6 +353,27 @@ export async function executeTool(name, input, cfg) {
             if (Array.isArray(input.assetLibraries)) body.assetLibraries = input.assetLibraries;
             if (input.creator && typeof input.creator === 'object') body.creator = input.creator;
             try { return await liferayPost(base, `/o/headless-admin-taxonomy/v1.0/sites/${siteId}/keywords`, body, user, pass); } catch (e) { return { error: e.message || String(e) }; }
+        }
+
+        // Create a DDM FreeMarker template via JSON-WS
+        if (name === 'create_ddm_template') {
+            const templateName = input?.name;
+            const script = input?.script;
+            const groupId = input?.groupId || siteId;
+            const classNameId = input?.classNameId;
+            const classPK = input?.classPK;
+            const resourceClassNameId = input?.resourceClassNameId;
+
+            if (!templateName || !script || !classNameId || !classPK || !resourceClassNameId) {
+                return { error: 'Missing required fields: name, script, classNameId, classPK, resourceClassNameId' };
+            }
+
+            try {
+                const tpl = await createDDMTemplateViaJsonWS({ baseUrl: base, groupId, classNameId, classPK, resourceClassNameId, name: templateName, description: input?.description || '', script, user, pass });
+                return { success: true, template: tpl };
+            } catch (e) {
+                return { error: e.message || String(e) };
+            }
         }
 
         // ── CATEGORY UPDATE / DELETE ──────────────────────────────────────────

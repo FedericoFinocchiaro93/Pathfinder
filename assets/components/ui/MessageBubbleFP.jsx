@@ -11,8 +11,17 @@ import botIcon from '../../img/PathfinderLogo.png';
 import { getDictionary, getLocale } from '../../lib/i18n.js';
 import { trackFeedback, getFeedback, removeFeedback } from '../../lib/feedbackTracker.js';
 
-function renderContent(text) {
-    const escaped = text
+function renderContent(text, onCodeDetected) {
+    // Parse code blocks (```lang\n...\n```) before escaping
+    const codeBlocks = [];
+    const textWithPlaceholders = text.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+        const idx = codeBlocks.length;
+        codeBlocks.push({ lang: lang || 'text', code: code.replace(/\n$/, '') });
+        if (onCodeDetected) onCodeDetected(codeBlocks[idx]);
+        return `\n%%CODE_BLOCK_${idx}%%\n`;
+    });
+
+    const escaped = textWithPlaceholders
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
@@ -27,6 +36,23 @@ function renderContent(text) {
             /(?<!href=")(https?:\/\/[^\s<"]+)/g,
             '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
         )
+        .replace(/%%CODE_BLOCK_(\d+)%%/g, (_, idx) => {
+            const block = codeBlocks[parseInt(idx)];
+            if (!block) return '';
+            const langLabel = block.lang || 'code';
+            const codeEscaped = block.code
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+            const preview = codeEscaped.length > 200 ? codeEscaped.substring(0, 200) + '…' : codeEscaped;
+            return `<div class="afp-code-block" data-code-idx="${idx}" data-lang="${langLabel}">` +
+                `<div class="afp-code-block-header">` +
+                    `<span class="afp-code-block-lang">${langLabel}</span>` +
+                    `<span class="afp-code-block-open" data-code-idx="${idx}" title="Open in editor">↗ Code Panel</span>` +
+                `</div>` +
+                `<pre class="afp-code-block-preview"><code>${preview}</code></pre>` +
+            `</div>`;
+        })
         .replace(/\n/g, '<br/>');
 
     return <span dangerouslySetInnerHTML={{ __html: html }} />;
@@ -92,10 +118,31 @@ function DocPreview({ doc }) {
     );
 }
 
-function MessageBubbleFP({ msg, onRegenerate, cfg }) {
+function MessageBubbleFP({ msg, onRegenerate, cfg, onOpenCode }) {
     const t = getDictionary();
     const [feedback, setFeedback] = useState(() => getFeedback(msg.id));
     const feedbackEnabled = cfg?.feedbackEnabled !== false;
+    const codeBlocksRef = React.useRef([]);
+    const bubbleRef = React.useRef(null);
+
+    const handleCodeDetected = React.useCallback((block) => {
+        codeBlocksRef.current.push(block);
+    }, []);
+
+    const handleBubbleClick = React.useCallback((e) => {
+        const openBtn = e.target.closest('.afp-code-block-open');
+        if (!openBtn) return;
+        const idx = parseInt(openBtn.dataset.codeIdx);
+        const block = codeBlocksRef.current[idx];
+        if (block && onOpenCode) {
+            onOpenCode(block.code, block.lang);
+        }
+    }, [onOpenCode]);
+
+    // Reset code blocks when message changes
+    React.useEffect(() => {
+        codeBlocksRef.current = [];
+    }, [msg.id]);
 
     const handleFeedback = (rating) => {
         const newRating = feedback === rating ? null : rating;
@@ -147,7 +194,7 @@ function MessageBubbleFP({ msg, onRegenerate, cfg }) {
                     </div>
                 )}
                 {msg.text && (
-                    <div className="afp-bubble">{renderContent(msg.text)}</div>
+                    <div className="afp-bubble" ref={bubbleRef} onClick={handleBubbleClick}>{renderContent(msg.text, handleCodeDetected)}</div>
                 )}
                 {isAssistantWithText && (onRegenerate || feedbackEnabled) && (
                     <div className="afp-msg-actions">

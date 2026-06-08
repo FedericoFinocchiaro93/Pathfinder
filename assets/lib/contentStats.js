@@ -525,7 +525,111 @@ export function computeContentInsights(cache, months = 12) {
         total: articles.length,
     };
 
-    return { publicationStatus, freshness, timeline, health };
+    // ── Content Quality Score (detailed per-article breakdown) ─────
+    const qualityCriteria = [
+        { key: 'hasTitle',       label: 'Has Title',           maxPoints: 10, description: 'Title is longer than 3 characters' },
+        { key: 'hasDescription', label: 'Has Description',     maxPoints: 10, description: 'Description is longer than 10 characters' },
+        { key: 'seoUrl',         label: 'SEO-Friendly URL',    maxPoints: 10, description: 'URL is present and under 60 characters' },
+        { key: 'hasCategories',  label: 'Has Categories',      maxPoints: 10, description: 'At least one taxonomy category is assigned' },
+        { key: 'hasKeywords',   label: 'Has Keywords',         maxPoints: 5, description: 'At least one keyword/tag is assigned' },
+        { key: 'wordCountOk',   label: 'Word Count OK',        maxPoints: 15, description: 'Content has between 50 and 5000 words' },
+        { key: 'recentUpdate',   label: 'Recently Updated',    maxPoints: 15, description: 'Content was modified within the last year' },
+        { key: 'richContent',    label: 'Content Richness',    maxPoints: 10, description: 'At least 60% of content fields are filled' },
+    ];
+    const maxTotal = qualityCriteria.reduce((s, c) => s + c.maxPoints, 0); // 85
+
+    const articleScores = articles.map(a => {
+        const fields = a.contentFields || [];
+        const stringFields = fields.filter(f => f.dataType === 'string' && f.contentFieldValue?.data);
+        const imageFields = fields.filter(f => f.dataType === 'image');
+        const totalFields = fields.length || 1;
+        const filledFields = fields.filter(f => {
+            if (!f.contentFieldValue) return false;
+            if (f.dataType === 'image') return Object.keys(f.contentFieldValue).length > 0;
+            if (f.dataType === 'boolean') return f.contentFieldValue.data !== undefined && f.contentFieldValue.data !== null;
+            return !!f.contentFieldValue.data;
+        }).length;
+
+        // Word count: sum of all string field word counts
+        let wordCount = 0;
+        for (const f of stringFields) {
+            wordCount += (f.contentFieldValue.data || '').split(/\s+/).filter(w => w.length > 0).length;
+        }
+
+        // Individual scores
+        const hasTitle = (a.title || '').trim().length > 3 ? 10 : 0;
+        const hasDescription = (a.description || '').trim().length > 10 ? 10 : 0;
+        const seoUrl = (a.friendlyUrlPath || '').length > 0 && (a.friendlyUrlPath || '').length <= 60 ? 10 : 0;
+        const hasCategories = (a.taxonomyCategoryBriefs?.length || 0) >= 1 ? 10 : 0;
+        const hasKeywords = (a.keywords?.length || 0) >= 1 ? 5 : 0;
+        const wordCountOk = (wordCount >= 50 && wordCount <= 5000) ? 15 : (wordCount > 0 ? 6 : 0);
+        const modified = a.dateModified ? new Date(a.dateModified).getTime() : (a.dateCreated ? new Date(a.dateCreated).getTime() : 0);
+        const recentUpdate = ((now - modified) < 365 * DAY) ? 15 : 0;
+        const richContent = filledFields / totalFields >= 0.6 ? 10 : Math.round(10 * (filledFields / totalFields));
+
+        const rawScore = hasTitle + hasDescription + seoUrl + hasCategories + hasKeywords + wordCountOk + recentUpdate + richContent;
+        const normalizedScore = Math.round((rawScore / maxTotal) * 100);
+
+        return {
+            id: a.id,
+            title: a.title,
+            friendlyUrlPath: a.friendlyUrlPath,
+            dateModified: a.dateModified,
+            rawScore,
+            normalizedScore,
+            breakdown: { hasTitle, hasDescription, seoUrl, hasCategories, hasKeywords, wordCountOk, recentUpdate, richContent },
+            wordCount,
+            filledFields,
+            totalFields,
+        };
+    });
+
+    // Aggregate quality stats
+    const qualityDistribution = { healthy: 0, warning: 0, critical: 0 };
+    const qualityBreakdown = {};
+    for (const c of qualityCriteria) {
+        qualityBreakdown[c.key] = { label: c.label, maxPoints: c.maxPoints, count: 0, pct: '0.0' };
+    }
+    for (const s of articleScores) {
+        if (s.normalizedScore >= 70) qualityDistribution.healthy++;
+        else if (s.normalizedScore >= 40) qualityDistribution.warning++;
+        else qualityDistribution.critical++;
+
+        for (const [key, val] of Object.entries(s.breakdown)) {
+            if (val > 0) qualityBreakdown[key].count++;
+        }
+    }
+    for (const c of qualityCriteria) {
+        qualityBreakdown[c.key].pct = total > 0 ? ((qualityBreakdown[c.key].count / total) * 100).toFixed(1) : '0.0';
+    }
+
+    // Actionable tips
+    const qualityTips = [];
+    const noDescCount = articleScores.filter(s => s.breakdown.hasDescription === 0).length;
+    const noCatCount = articleScores.filter(s => s.breakdown.hasCategories === 0).length;
+    const noKwCount = articleScores.filter(s => s.breakdown.hasKeywords === 0).length;
+    const shortCount = articleScores.filter(s => s.wordCount > 0 && s.wordCount < 50).length;
+    const staleArticleCount = articleScores.filter(s => s.breakdown.recentUpdate === 0).length;
+
+    if (noCatCount > 0) qualityTips.push({ key: 'addCategories', message: `Add categories to ${noCatCount} article${noCatCount > 1 ? 's' : ''} to boost score +10`, priority: 'high' });
+    if (noDescCount > 0) qualityTips.push({ key: 'addDescription', message: `Add descriptions to ${noDescCount} article${noDescCount > 1 ? 's' : ''} to boost score +10`, priority: 'high' });
+    if (noKwCount > 0) qualityTips.push({ key: 'addKeywords', message: `Add keywords to ${noKwCount} article${noKwCount > 1 ? 's' : ''} to boost score +5`, priority: 'medium' });
+    if (shortCount > 0) qualityTips.push({ key: 'expandContent', message: `${shortCount} article${shortCount > 1 ? 's are' : ' is'} too short (< 50 words)`, priority: 'medium' });
+    if (staleArticleCount > 0) qualityTips.push({ key: 'updateContent', message: `${staleArticleCount} article${staleArticleCount > 1 ? 's' : ''} not updated in over a year`, priority: 'medium' });
+
+    const avgQualityScore = articleScores.length > 0 ? Math.round(articleScores.reduce((s, a) => s + a.normalizedScore, 0) / articleScores.length) : 0;
+
+    const quality = {
+        score: avgQualityScore,
+        distribution: qualityDistribution,
+        breakdown: qualityBreakdown,
+        criteria: qualityCriteria,
+        tips: qualityTips,
+        articleScores,
+        total: articles.length,
+    };
+
+    return { publicationStatus, freshness, timeline, health, quality };
 }
 
 /**
