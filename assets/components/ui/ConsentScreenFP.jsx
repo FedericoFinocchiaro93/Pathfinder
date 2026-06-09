@@ -6,8 +6,8 @@
 
 import React, { useState } from 'react';
 
-const CONSENT_KEY    = 'acfp_consent_v1';
-const CONSENT_VERSION = 1;
+const CONSENT_KEY    = 'acfp_consent_v2';
+const CONSENT_VERSION = 2;
 
 export function hasConsented() {
     try {

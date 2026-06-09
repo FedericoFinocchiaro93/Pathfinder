@@ -334,8 +334,6 @@ This project is distributed as a client extension for Liferay DXP. See the Terms
 
 ---
 
-⚠️ Recommended for staging environments. Some features are currently in beta. Direct use in production is discouraged until full stability is confirmed in your specific portal configuration.
-
 ## 🤝 Contributing
 
 1. Fork the repository

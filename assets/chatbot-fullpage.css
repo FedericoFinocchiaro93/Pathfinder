@@ -5057,11 +5057,42 @@ ai-chatbot-fullpage {
 }
 
 .afp-eula-title {
+    flex: 1;
     font-size: 18px;
     font-weight: 700;
     color: #f1f5f9;
     margin: 0;
     letter-spacing: -0.01em;
+}
+
+.afp-eula-lang-toggle {
+    display: flex;
+    gap: 4px;
+    margin-right: 8px;
+}
+
+.afp-eula-lang-btn {
+    padding: 4px 10px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 6px;
+    background: transparent;
+    color: #94a3b8;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.afp-eula-lang-btn:hover {
+    border-color: rgba(148, 163, 184, 0.4);
+    color: #e2e8f0;
+}
+
+.afp-eula-lang-btn.afp-eula-lang-active {
+    background: linear-gradient(135deg, var(--afp-primary, #0054b1), var(--afp-accent, #4f8ef7));
+    border-color: transparent;
+    color: #fff;
 }
 
 .afp-eula-close {
@@ -5103,6 +5134,18 @@ ai-chatbot-fullpage {
 .afp-eula-body::-webkit-scrollbar-thumb {
     background: rgba(148,163,184,0.2);
     border-radius: 3px;
+}
+
+.afp-eula-important {
+    background: rgba(234, 179, 8, 0.08);
+    border: 1px solid rgba(234, 179, 8, 0.25);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    font-size: 12.5px;
+    color: #fbbf24;
+    line-height: 1.6;
+    font-weight: 500;
 }
 
 .afp-eula-section {
