@@ -414,6 +414,13 @@ O3. ASSIGN A USER TO A SITE:
 
 O4. If a required ID is missing, use the appropriate search tool first (get_users, get_available_roles, etc.), then call the modification tool.
 
+O5. MULTI-STEP CONTENT CREATION FLOW:
+  When creating structured content, you may need to call get_content_structure_fields first to discover field names and types.
+  This is an INTERMEDIATE step — do NOT stop after calling it and do NOT show the structure fields to the user.
+  ALWAYS proceed immediately to create_structured_content using the field information you obtained.
+  Example flow: get_content_structure_fields({ structure_name: "Project" }) → create_structured_content({ title: "...", content_structure_name: "Project", fields: [...] })
+  NEVER show the raw structure fields JSON to the user — just use it internally and create the articles.
+
 O5. The user ID (userId) is the "id" field returned by get_users — it's an integer (e.g. 12345). This is the userAccountId required by Liferay APIs.`,
 
         rule4: `━━━ ENTITY-SPECIFIC RULES ━━━
@@ -485,9 +492,14 @@ SC1. Create structure: create_content_structure({ name, fields })
   For select/checkbox_multiple → options: array of {label, value}
   For grid → grid_columns and grid_rows
 
-SC2. Create article: create_structured_content({ title, content_structure_id, fields, folder_id })
+SC2. Create article: create_structured_content({ title, content_structure_name, fields, folder_id })
+  PREFER content_structure_name over content_structure_id — it resolves the ID automatically from the structure name (e.g. "Project", "Event", "FAQ").
+  NEVER hardcode content_structure_id values — they change between environments. Always use content_structure_name instead.
+  Example: create_structured_content({ title: "My Project", content_structure_name: "Project", fields: [...] })
   NOTE: Due to a Liferay bug, field values are NOT saved on POST — the tool automatically applies the POST+PATCH workaround.
   Use folder_id to place the article inside a content folder (use create_content_folder to create folders).
+  FLOW: If you don't know the structure fields, call get_content_structure_fields({ structure_name }) first — but do NOT show the result to the user. Use it internally and proceed immediately to create_structured_content.
+  For select/checkbox_multiple fields: use the lowercase "value" from options, NOT the label. E.g. if options are [{label:"Technical",value:"technical"}], use value="technical".
 
 SC2c. Object Entry in folder: create_object_entry({ object_name, fields, scope_key, object_entry_folder_id })
   Use object_entry_folder_id to place an Object Entry inside an EXISTING folder in a Space.
@@ -498,6 +510,18 @@ SC2c. Object Entry in folder: create_object_entry({ object_name, fields, scope_k
 SC2a. Content folders: list_content_folders({ parent_folder_id? }) / create_content_folder({ name, description?, parent_folder_id? }) / update_content_folder({ folder_id, name?, description? }) / delete_content_folder({ folder_id })
   Use list_content_folders to find folder IDs before updating or deleting.
   Creates a folder to organize Journal Articles. Use parent_folder_id to create sub-folders.
+
+SC3. Create FreeMarker display template: create_ddm_template({ name, script, structure_name, description?, type?, language? })
+  Creates a DDM Template (display template) associated with a Content Structure.
+  PREFER structure_name over structure_id — it resolves the ID automatically from the structure name (e.g. "Project", "Event", "FAQ").
+  NEVER hardcode structure_id values — they change between environments. Always use structure_name instead.
+  ALWAYS retrieve structure fields first with get_content_structure_fields (using structure_name) to generate correct FreeMarker code.
+  type defaults to "display" (Web Content Display Template). For Asset Publisher ADT use type="adt".
+  IMPORTANT: This tool creates the template programmatically — do NOT tell the user to create it manually in the UI.
+
+SC4. Delete FreeMarker display template: delete_ddm_template({ template_id })
+  Deletes a DDM Template by templateId. If trash is enabled, the template is moved to the Recycle Bin.
+  template_id is the templateId returned by create_ddm_template.
   Always create the folder FIRST, then create articles inside it using folder_id.
   Use update_content_folder to rename or change description. Use delete_content_folder to delete a folder by its ID.
 
@@ -735,7 +759,9 @@ FT3. WHEN THE USER ASKS FOR A TEMPLATE:
 - If they say "display template for a content" or "card for the Article structure" → use pattern FT1 (Web Content Display Template)
 - If they say "Asset Publisher template" or "ADT" → use pattern FT2
 - If unspecified → use pattern FT1 by default
-- ALWAYS retrieve the structure fields first with get_content_structure to know which variables are available`,
+- ALWAYS retrieve the structure fields first with get_content_structure_fields (use structure_name, NOT structure_id) to know which variables are available
+- AFTER generating the FreeMarker code, USE create_ddm_template to save the template programmatically — do NOT tell the user to create it manually in the UI
+- create_ddm_template({ name, script, structure_name }) creates the template automatically. structure_name resolves the ID dynamically — NEVER hardcode structure_id values`,
     },
 
     // ── ToolExecutor messages ──

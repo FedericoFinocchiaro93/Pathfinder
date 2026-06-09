@@ -238,14 +238,81 @@ export async function liferayUploadDocument(baseUrl, siteId, file, fileName, tit
 }
 
 /**
+ * Resolve DDM template creation parameters dynamically via JSON-WS.
+ * Given a structureId (DDM Structure / Content Structure), fetches:
+ *   - classNameId        → classNameId of com.liferay.dynamic.data.mapping.model.DDMStructure
+ *   - classPK            → the structure ID itself (DDM Structure PK)
+ *   - resourceClassNameId → classNameId of com.liferay.journal.model.JournalArticle
+ *
+ * These values are cached in memory after the first call.
+ *
+ * @param {string} baseUrl - Liferay base URL
+ * @param {string|number} structureId - The DDM Structure ID (from get_content_structures)
+ * @param {string} user - Optional username for Basic Auth
+ * @param {string} pass - Optional password for Basic Auth
+ * @returns {{ classNameId: number, classPK: number, resourceClassNameId: number }}
+ */
+const _ddmClassIdCache = {};
+
+export async function resolveDDMTemplateParams({ baseUrl, structureId, user, pass }) {
+    const token = getLiferayToken();
+    const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+    if (user && pass) {
+        headers['Authorization'] = 'Basic ' + btoa(user + ':' + pass);
+    } else if (token) {
+        headers['x-csrf-token'] = token;
+    }
+
+    // Fetch classNameId for DDMStructure (cached)
+    if (!_ddmClassIdCache.ddmStructure) {
+        dbg('resolveDDMTemplateParams: fetching classNameId for DDMStructure');
+        const cnUrl = baseUrl.replace(/\/$/, '') + '/api/jsonws/classname/fetch-class-name';
+        const cnBody = new URLSearchParams({ value: 'com.liferay.dynamic.data.mapping.model.DDMStructure' });
+        const cnRes = await fetch(cnUrl, { method: 'POST', credentials: 'same-origin', headers, body: cnBody.toString() });
+        if (!cnRes.ok) {
+            const errText = await cnRes.text().catch(() => '');
+            throw new Error(`Failed to fetch DDMStructure classNameId: HTTP ${cnRes.status} — ${errText.substring(0, 500)}`);
+        }
+        const cnData = await cnRes.json();
+        _ddmClassIdCache.ddmStructure = Number(cnData.classNameId);
+        if (!_ddmClassIdCache.ddmStructure) throw new Error('classNameId not found in JSON-WS response for DDMStructure');
+    }
+
+    // Fetch classNameId for JournalArticle (cached)
+    if (!_ddmClassIdCache.journalArticle) {
+        dbg('resolveDDMTemplateParams: fetching classNameId for JournalArticle');
+        const jaBody = new URLSearchParams({ value: 'com.liferay.journal.model.JournalArticle' });
+        const jaRes = await fetch(baseUrl.replace(/\/$/, '') + '/api/jsonws/classname/fetch-class-name', { method: 'POST', credentials: 'same-origin', headers, body: jaBody.toString() });
+        if (!jaRes.ok) {
+            const errText = await jaRes.text().catch(() => '');
+            throw new Error(`Failed to fetch JournalArticle classNameId: HTTP ${jaRes.status} — ${errText.substring(0, 500)}`);
+        }
+        const jaData = await jaRes.json();
+        _ddmClassIdCache.journalArticle = Number(jaData.classNameId);
+        if (!_ddmClassIdCache.journalArticle) throw new Error('classNameId not found in JSON-WS response for JournalArticle');
+    }
+
+    dbg('resolveDDMTemplateParams: resolved', { classNameId: _ddmClassIdCache.ddmStructure, classPK: structureId, resourceClassNameId: _ddmClassIdCache.journalArticle });
+
+    return {
+        classNameId: _ddmClassIdCache.ddmStructure,
+        classPK: Number(structureId),
+        resourceClassNameId: _ddmClassIdCache.journalArticle,
+    };
+}
+
+/**
  * Create a DDM template via JSON-WS (form-encoded POST to /api/jsonws/ddm.ddmtemplate/add-template)
  * Expects FreeMarker script in `script` and returns the created template object on success.
+ *
+ * Key parameter mapping (verified via testing):
+ *   classNameId        = classNameId of DDMStructure (NOT JournalArticle)
+ *   classPK            = structureId of the target DDM Structure
+ *   resourceClassNameId = classNameId of JournalArticle
  */
-export async function createDDMTemplateViaJsonWS({ baseUrl, groupId, classNameId, classPK, resourceClassNameId, name, description = '', script, type = 'display', language = 'ftl', serviceContext = null, user, pass }) {
+export async function createDDMTemplateViaJsonWS({ baseUrl, groupId, classNameId, classPK, resourceClassNameId, name, description = '', script, type = 'display', language = 'ftl', user, pass }) {
     const token = getLiferayToken();
     const locale = (window.Liferay && window.Liferay.ThemeDisplay && window.Liferay.ThemeDisplay.getLanguageId && window.Liferay.ThemeDisplay.getLanguageId()) || 'en_US';
-
-    const svc = serviceContext || { scopeGroupId: Number(groupId) };
 
     const params = new URLSearchParams();
     if (token) params.append('p_auth', token);
@@ -260,7 +327,7 @@ export async function createDDMTemplateViaJsonWS({ baseUrl, groupId, classNameId
     params.append('mode', '');
     params.append('language', String(language));
     params.append('script', script || '');
-    params.append('serviceContext', JSON.stringify(svc));
+    params.append('serviceContext', '{}');
 
     const url = baseUrl.replace(/\/$/, '') + '/api/jsonws/ddm.ddmtemplate/add-template';
     const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
@@ -279,6 +346,35 @@ export async function createDDMTemplateViaJsonWS({ baseUrl, groupId, classNameId
     }
     // JSON-WS returns JSON
     return res.json();
+}
+
+/**
+ * Delete a DDM template via JSON-WS (form-encoded POST to /api/jsonws/ddm.ddmtemplate/delete-template)
+ * Uses templateId to identify the template to delete.
+ * Returns { deleted: true, templateId } on success.
+ */
+export async function deleteDDMTemplateViaJsonWS({ baseUrl, templateId, user, pass }) {
+    const token = getLiferayToken();
+    const params = new URLSearchParams();
+    if (token) params.append('p_auth', token);
+    params.append('templateId', String(templateId));
+
+    const url = baseUrl.replace(/\/$/, '') + '/api/jsonws/ddm.ddmtemplate/delete-template';
+    const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+    if (user && pass) {
+        headers['Authorization'] = 'Basic ' + btoa(user + ':' + pass);
+    } else if (token) {
+        headers['x-csrf-token'] = token;
+    }
+
+    dbg('JSONWS delete-template', url, { templateId });
+
+    const res = await fetch(url, { method: 'POST', credentials: 'same-origin', headers, body: params.toString() });
+    if (!res.ok) {
+        const bodyText = await res.text().catch(() => '');
+        throw new Error(`JSONWS delete-template failed: HTTP ${res.status} ${res.statusText} — ${bodyText.substring(0, 2000)}`);
+    }
+    return { deleted: true, templateId: Number(templateId) };
 }
 
 /**

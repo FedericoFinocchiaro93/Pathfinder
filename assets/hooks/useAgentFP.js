@@ -233,7 +233,7 @@ export function useAgentFP({ cfg, history, setHistory, setMessages }) {
         // Track creation tools during Excel batch processing to emit progress messages
         // Only show ImportProgressBubble when importing from an Excel file (isExcelImport param)
         const BATCH_CREATE_TOOLS = new Set([
-            'create_content_structure', 'create_object', 'create_vocabulary',
+            'create_content_structure', 'create_object', 'create_vocabulary', 'create_ddm_template', 'delete_ddm_template',
             'create_category', 'create_site_page', 'create_role', 'create_user',
             'assign_role_to_user',
         ]);
@@ -271,6 +271,7 @@ export function useAgentFP({ cfg, history, setHistory, setMessages }) {
         let lastBatchProgressType = null;
         let importProgressMsgId = null; // ID of the import_progress message for in-place updates
         const allToolCalls = []; // Accumulate tool calls for feedback tracking
+        let lastExecutedToolName = null; // track last tool to detect intermediate-only stops
 
         // Helper: extract a human-readable entity name from tool input/result
         function extractEntityName(toolName, input, result) {
@@ -311,17 +312,37 @@ export function useAgentFP({ cfg, history, setHistory, setMessages }) {
                     removeThinking();
                     removeSearchingMsg();
 
+                    // ── Intermediate tool followed by end_turn: force continuation ──
+                    // If the last executed tool was an intermediate lookup (e.g. get_content_structure_fields)
+                    // and the LLM responded with text instead of calling the next tool, force it to continue.
+                    const INTERMEDIATE_CONTINUE_TOOLS = new Set(['get_content_structure_fields', 'get_content_structures', 'get_categories', 'get_vocabularies', 'get_available_languages', 'get_available_roles', 'get_users', 'get_custom_objects', 'get_user_spaces', 'get_object_fields']);
+                    if (lastExecutedToolName && INTERMEDIATE_CONTINUE_TOOLS.has(lastExecutedToolName) && iterations < MAX_ITERATIONS) {
+                        dbg('[FP] Intermediate tool followed by end_turn, forcing continuation...');
+                        // Remove the last assistant message (the intermediate text) from UI
+                        setMessages((prev) => {
+                            const last = prev[prev.length - 1];
+                            if (last?.role === 'assistant') return prev.slice(0, -1);
+                            return prev;
+                        });
+                        addThinking();
+                        const continuePrompt = 'You called a lookup tool but stopped before performing the action. Continue now — call the appropriate creation/modification tool using the information you obtained. Do NOT describe what you found, just proceed with the action.';
+                        currentHistory = appendUserMessage(currentHistory, continuePrompt, p);
+                        lastExecutedToolName = null;
+                        continue;
+                    }
+
                     // ── Batch progress detection ──
                     // More specific pattern: requires ✅/🎉 AND a clear batch-progress keyword
                     const batchProgressPattern = /[✅🎉].*\b(prosegu|proceeding|continu|next|creating|creando|creazi|batch complete|all \d+|strutture create|vocabolar|categor|pagine create|ruoli creat|utenti creat|objects created|structures created)\b/i;
                     const isBatchProgress = batchProgressPattern.test(response.text || '');
 
                     // ── Batch final summary ──
-                    // If we tracked batch creation, finalize the import_progress message
+                    // Only show batch summary when importing from an Excel file (isExcelImport)
+                    // For single tool calls, the LLM's own response is sufficient
                     const batchTypes = Object.keys(batchCounters);
                     const llmHasSummary = /🎉.*batch|🎉.*complet|🎉.*creat/i.test(response.text || '');
                     let emittedOwnSummary = false;
-                    if (batchTypes.length > 0) {
+                    if (batchTypes.length > 0 && isExcelImport) {
                         const totalProcessed = Object.values(batchCounters).reduce((s, c) => s + c, 0);
                         const totalErrors = batchTypes.reduce((sum, type) => sum + (batchErrors[type] || 0), 0);
                         const phaseParts = batchTypes.map((type) => {
@@ -417,6 +438,8 @@ export function useAgentFP({ cfg, history, setHistory, setMessages }) {
                         dbg(`[FP] Tool ${tb.name}:`, count, 'items');
                         toolResults.push({ content: result });
                     }
+                    // Track last executed tool name for intermediate-continuation detection
+                    lastExecutedToolName = toolUseBlocks[toolUseBlocks.length - 1]?.name || null;
 
                     if (/\b(json|mostra il json|mostrami il json|show json|raw json)\b/i.test(userText)) {
                         const jsonText = 'Risposta JSON:\n' + JSON.stringify(toolResults.map((tr) => tr.content), null, 2);

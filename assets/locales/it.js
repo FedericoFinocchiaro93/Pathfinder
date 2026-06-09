@@ -414,6 +414,13 @@ O3. ASSEGNARE UN UTENTE A UN SITO:
 
 O4. Se manca un ID necessario, usa prima il tool di ricerca appropriato (get_users, get_available_roles, ecc.), poi chiama il tool di modifica.
 
+O5. FLUSSO MULTI-STEP PER CREAZIONE CONTENUTI:
+  Quando crei contenuti strutturati, potresti dover chiamare get_content_structure_fields prima per scoprire nomi e tipi dei campi.
+  Questo è uno step INTERMEDIO — NON fermarti dopo averlo chiamato e NON mostrare i campi della struttura all'utente.
+  PROCEDI SEMPRE immediatamente a create_structured_content usando le informazioni sui campi ottenute.
+  Flusso esempio: get_content_structure_fields({ structure_name: "Project" }) → create_structured_content({ title: "...", content_structure_name: "Project", fields: [...] })
+  NON mostrare MAI il JSON dei campi della struttura all'utente — usalo internamente e crea gli articoli.
+
 O5. L'ID utente (userId) è il campo "id" restituito da get_users — è un numero intero (es. 12345). Questo è il userAccountId richiesto dalle API Liferay.`,
 
         rule4: `━━━ REGOLE SPECIFICHE PER ENTITÀ ━━━
@@ -485,9 +492,14 @@ SC1. Crea struttura: create_content_structure({ name, fields })
   Per select/checkbox_multiple → options: array di {label, value}
   Per grid → grid_columns e grid_rows
 
-SC2. Crea articolo: create_structured_content({ title, content_structure_id, fields, folder_id })
+SC2. Crea articolo: create_structured_content({ title, content_structure_name, fields, folder_id })
+  PREFERISCI content_structure_name rispetto a content_structure_id — risolve automaticamente l'ID dal nome della struttura (es. "Project", "Event", "FAQ").
+  NON usare MAI valori content_structure_id hardcoded — cambiano tra ambienti diversi. Usa sempre content_structure_name.
+  Esempio: create_structured_content({ title: "Mio Progetto", content_structure_name: "Project", fields: [...] })
   NOTA: per un bug di Liferay i valori dei campi NON vengono salvati nel POST — il tool applica automaticamente il workaround POST+PATCH.
   Usa folder_id per inserire l'articolo in una cartella (usa create_content_folder per creare cartelle).
+  FLUSSO: Se non conosci i campi della struttura, chiama prima get_content_structure_fields({ structure_name }) — ma NON mostrare il risultato all'utente. Usalo internamente e procedi subito a create_structured_content.
+  Per i campi select/checkbox_multiple: usa il "value" minuscolo delle opzioni, NON la label. Es. se le opzioni sono [{label:"Technical",value:"technical"}], usa value="technical".
 
 SC2c. Object Entry in cartella: create_object_entry({ object_name, fields, scope_key, object_entry_folder_id })
   Usa object_entry_folder_id per inserire una voce di Object Entry in una cartella ESISTENTE dentro uno Space.
@@ -498,6 +510,18 @@ SC2c. Object Entry in cartella: create_object_entry({ object_name, fields, scope
 SC2a. Cartelle contenuti: list_content_folders({ parent_folder_id? }) / create_content_folder({ name, description?, parent_folder_id? }) / update_content_folder({ folder_id, name?, description? }) / delete_content_folder({ folder_id })
   Usa list_content_folders per trovare gli ID delle cartelle prima di aggiornarle o eliminarle.
   Crea una cartella per organizzare i Journal Articles. Usa parent_folder_id per creare sottocartelle.
+
+SC3. Crea template FreeMarker di visualizzazione: create_ddm_template({ name, script, structure_name, description?, type?, language? })
+  Crea un DDM Template (template di visualizzazione) associato a una struttura di contenuto.
+  PREFERISCI structure_name rispetto a structure_id — risolve automaticamente l'ID dal nome della struttura (es. "Project", "Event", "FAQ").
+  NON usare MAI valori structure_id hardcoded — cambiano tra ambienti diversi. Usa sempre structure_name.
+  SEMPRE recupera prima i campi della struttura con get_content_structure_fields (usando structure_name) per generare codice FreeMarker corretto.
+  type di default è "display" (Web Content Display Template). Per Asset Publisher ADT usa type="adt".
+  IMPORTANTE: Questo tool crea il template programmaticamente — NON dire all'utente di crearlo manualmente nella UI.
+
+SC4. Elimina template FreeMarker di visualizzazione: delete_ddm_template({ template_id })
+  Elimina un DDM Template tramite templateId. Se il cestino è abilitato, il template viene spostato nel cestino.
+  template_id è il templateId restituito da create_ddm_template.
   Crea SEMPRE prima la cartella, poi crea gli articoli al suo interno usando folder_id.
   Usa update_content_folder per rinominare o cambiare descrizione. Usa delete_content_folder per eliminare una cartella tramite il suo ID.
 
@@ -735,7 +759,9 @@ FT3. QUANDO L'UTENTE CHIEDE UN TEMPLATE:
 - Se dice "template per la visualizzazione di un contenuto" o "card per la struttura Article" → usa il pattern FT1 (Web Content Display Template)
 - Se dice "template per l'Asset Publisher" o "ADT" → usa il pattern FT2
 - Se non specifica → usa il pattern FT1 di default
-- SEMPRE recupera prima i campi della struttura con get_content_structure per sapere quali variabili sono disponibili`,
+- SEMPRE recupera prima i campi della struttura con get_content_structure_fields per sapere quali variabili sono disponibili
+- DOPO aver generato il codice FreeMarker, USA create_ddm_template per salvare il template programmaticamente — NON dire all'utente di crearlo manualmente nella UI
+- create_ddm_template({ name, script, structure_name }) crea il template automaticamente. structure_name risolve l'ID dinamicamente — NON usare MAI valori structure_id hardcoded`
     },
 
     // ── ToolExecutor messages ──

@@ -109,7 +109,7 @@ export function useAgent({ cfg, history, setHistory, setMessages, open, setUnrea
         return appendAssistantToHistory(currentHistory, makeAssistantResponse(p, text), p);
     }, [removeSearchingMsg, setMessages, open, setUnread]);
 
-    const runAgent = useCallback(async (userText, externalSetBusy) => {
+    const runAgent = useCallback(async (userText, externalSetBusy, isExcelImport = false) => {
         if (busyRef.current) return;
         const base = getBaseUrl(cfg.liferayUrl);
         const p    = cfg.llmProvider;
@@ -137,7 +137,7 @@ export function useAgent({ cfg, history, setHistory, setMessages, open, setUnrea
 
         // ── Batch progress tracking ──
         const BATCH_CREATE_TOOLS = new Set([
-            'create_content_structure', 'create_object', 'create_vocabulary',
+            'create_content_structure', 'create_object', 'create_vocabulary', 'create_ddm_template', 'delete_ddm_template',
             'create_category', 'create_site_page', 'create_role', 'create_user',
             'assign_role_to_user', 'create_keyword',
         ]);
@@ -155,6 +155,7 @@ export function useAgent({ cfg, history, setHistory, setMessages, open, setUnrea
         const batchCounters = {};
         const batchErrors   = {};
         let lastBatchProgressType = null;
+        let lastExecutedToolName = null; // track last tool to detect intermediate-only stops
 
         try {
             let iterations = 0;
@@ -166,13 +167,33 @@ export function useAgent({ cfg, history, setHistory, setMessages, open, setUnrea
                 if (response.stop_reason === 'end_turn') {
                     removeThinking(); removeSearchingMsg();
 
+                    // ── Intermediate tool followed by end_turn: force continuation ──
+                    // If the last executed tool was an intermediate lookup (e.g. get_content_structure_fields)
+                    // and the LLM responded with text instead of calling the next tool, force it to continue.
+                    const INTERMEDIATE_CONTINUE_TOOLS = new Set(['get_content_structure_fields', 'get_content_structures', 'get_categories', 'get_vocabularies', 'get_available_languages', 'get_available_roles', 'get_users', 'get_custom_objects', 'get_user_spaces', 'get_object_fields']);
+                    if (lastExecutedToolName && INTERMEDIATE_CONTINUE_TOOLS.has(lastExecutedToolName) && iterations < MAX_ITERATIONS) {
+                        dbg('[Agent] Intermediate tool followed by end_turn, forcing continuation...');
+                        // Remove the last assistant message (the intermediate text) from UI
+                        setMessages((prev) => {
+                            const last = prev[prev.length - 1];
+                            if (last?.role === 'assistant' && last?.id === prev[prev.length - 1]?.id) return prev.slice(0, -1);
+                            return prev;
+                        });
+                        addThinking();
+                        const continuePrompt = 'You called a lookup tool but stopped before performing the action. Continue now — call the appropriate creation/modification tool using the information you obtained. Do NOT describe what you found, just proceed with the action.';
+                        currentHistory = appendUserMessage(currentHistory, continuePrompt, p);
+                        lastExecutedToolName = null;
+                        continue;
+                    }
+
                     // ── Batch progress detection ──
                     const batchProgressPattern = /[✅🎉].*\b(prosegu|proceed|continu|next|creating|creando|creazi|batch|struttur|vocabolar|categor|pagin|ruol|utent|object|structure)\b/i;
                     const isBatchProgress = batchProgressPattern.test(response.text || '');
 
                     // ── Batch final summary ──
+                    // Only show batch summary when importing from an Excel file (isExcelImport)
                     const batchTypes = Object.keys(batchCounters);
-                    if (batchTypes.length > 0) {
+                    if (batchTypes.length > 0 && isExcelImport) {
                         const summaryParts = batchTypes.map((type) => {
                             const c = batchCounters[type];
                             const e = batchErrors[type] || 0;
@@ -208,6 +229,8 @@ export function useAgent({ cfg, history, setHistory, setMessages, open, setUnrea
                         const result = await executeTool(tb.name, tb.input, cfg);
                         toolResults.push({ content: result });
                     }
+                    // Track last executed tool name for intermediate-continuation detection
+                    lastExecutedToolName = toolUseBlocks[toolUseBlocks.length - 1]?.name || null;
 
                     if (/\b(json|mostra il json|mostrami il json|show json|raw json)\b/i.test(userText)) {
                         const jsonText = 'Risposta JSON:\n' + JSON.stringify(toolResults.map((tr) => tr.content), null, 2);

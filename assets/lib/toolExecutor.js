@@ -5,7 +5,7 @@
 
 import { dbg } from './utils.js';
 import {
-    liferayGet, liferayPost, liferayPut, liferayPatch, liferayDelete, liferayUploadDocument, createDDMTemplateViaJsonWS, getBaseUrl, getSiteId,
+    liferayGet, liferayPost, liferayPut, liferayPatch, liferayDelete, liferayUploadDocument, createDDMTemplateViaJsonWS, deleteDDMTemplateViaJsonWS, resolveDDMTemplateParams, getBaseUrl, getSiteId,
     buildKeywordFilter, encodeFilter,
     parseStructuredContentItem,
     fetchApiList, fetchApiSpec,
@@ -62,6 +62,43 @@ async function resolveObjectRestPath(base, objectName, user, pass) {
 
 const SC_BASE_PARAMS = (page = 1, pageSize = 8) => `page=${page}&pageSize=${pageSize}`;
 
+/**
+ * Risolve l'ID di una Content Structure dal nome.
+ * Chiama get_content_structures e cerca per nome (case-insensitive).
+ * Cache in _structureNameCache per evitare chiamate ripetute.
+ */
+const _structureNameCache = {};
+async function resolveStructureIdByName(base, siteId, structureName, user, pass) {
+    if (!structureName) return null;
+    const key = `${siteId}:${structureName.toLowerCase()}`;
+    if (_structureNameCache[key] !== undefined) return _structureNameCache[key];
+    try {
+        const data = await liferayGet(base, `/o/headless-delivery/v1.0/sites/${siteId}/content-structures?pageSize=200&fields=id,name`, user, pass);
+        const items = data.items || [];
+        // Populate cache with all structures
+        for (const s of items) {
+            _structureNameCache[`${siteId}:${(s.name || '').toLowerCase()}`] = s.id;
+        }
+        const found = items.find((s) => (s.name || '').toLowerCase() === structureName.toLowerCase().trim());
+        if (found) {
+            dbg(`resolveStructureIdByName: "${structureName}" → id=${found.id}`);
+            return found.id;
+        }
+        // Partial match fallback
+        const partial = items.find((s) => (s.name || '').toLowerCase().includes(structureName.toLowerCase().trim()));
+        if (partial) {
+            dbg(`resolveStructureIdByName: "${structureName}" → id=${partial.id} (partial match: "${partial.name}")`);
+            return partial.id;
+        }
+        dbg(`resolveStructureIdByName: "${structureName}" not found`);
+        _structureNameCache[key] = null; // cache miss as null
+        return null;
+    } catch (e) {
+        dbg(`resolveStructureIdByName: error: ${e.message}`);
+        return null;
+    }
+}
+
 const NO_SITE_TOOLS = new Set([
     'list_available_apis', 'get_api_spec', 'call_liferay_api',
     'get_current_user', 'get_users',
@@ -83,6 +120,7 @@ const NO_SITE_TOOLS = new Set([
     'pick_document', 'list_document_folders', 'list_folder_documents', 'upload_document',
     'generate_excel_template',
     'get_content_structure_fields',
+    'create_ddm_template', 'delete_ddm_template',
     'update_space', 'delete_space', 'create_space', 'connect_space_site', 'disconnect_space_site',
     'assign_user_to_space', 'remove_user_from_space',
 ]);
@@ -217,8 +255,14 @@ export async function executeTool(name, input, cfg) {
         if (name === 'get_content_structures') { return await liferayGet(base, `/o/headless-delivery/v1.0/sites/${siteId}/content-structures?pageSize=${input.page_size || 20}&fields=id,name,description`, user, pass); }
 
         if (name === 'get_content_structure_fields') {
-            if (!input?.structure_id) return { error: 'structure_id obbligatorio. Usa get_content_structures per trovarlo.' };
-            const result = await liferayGet(base, `/o/headless-delivery/v1.0/content-structures/${input.structure_id}`, user, pass);
+            // Resolve structure_id from structure_name if provided
+            let structureId = input?.structure_id;
+            if (!structureId && input?.structure_name) {
+                structureId = await resolveStructureIdByName(base, siteId, input.structure_name, user, pass);
+                if (!structureId) return { error: `Content structure "${input.structure_name}" not found. Use get_content_structures to see available structures.` };
+            }
+            if (!structureId) return { error: 'structure_id or structure_name required. Use get_content_structures to find it.' };
+            const result = await liferayGet(base, `/o/headless-delivery/v1.0/content-structures/${structureId}`, user, pass);
             if (result?.contentStructureFields) {
                 return {
                     id: result.id,
@@ -240,9 +284,15 @@ export async function executeTool(name, input, cfg) {
         }
 
         if (name === 'search_by_structure') {
-            if (!input.structure_id) return { error: 'structure_id obbligatorio' };
+            // Resolve structure_id from structure_name if provided
+            let structureId = input.structure_id;
+            if (!structureId && input.structure_name) {
+                structureId = await resolveStructureIdByName(base, siteId, input.structure_name, user, pass);
+                if (!structureId) return { error: `Content structure "${input.structure_name}" not found. Use get_content_structures to see available structures.` };
+            }
+            if (!structureId) return { error: 'structure_id or structure_name required. Use get_content_structures to find it.' };
             const sq = input.query ? encodeURIComponent(input.query) : ''; let qs = `pageSize=${input.page_size || 10}`; if (sq) qs = `search=${sq}&` + qs; qs += `&sort=${input.sort ? encodeURIComponent(input.sort) : encodeURIComponent('datePublished:desc')}`;
-            const result = await liferayGet(base, `/o/headless-delivery/v1.0/content-structures/${input.structure_id}/structured-contents?${qs}`, user, pass);
+            const result = await liferayGet(base, `/o/headless-delivery/v1.0/content-structures/${structureId}/structured-contents?${qs}`, user, pass);
             if (result.items) result.items = result.items.map(parseStructuredContentItem); return result;
         }
 
@@ -356,21 +406,58 @@ export async function executeTool(name, input, cfg) {
         }
 
         // Create a DDM FreeMarker template via JSON-WS
+        // Required: name, script, structure_id (DDM Structure ID from get_content_structures)
+        // Optional: classNameId, classPK, resourceClassNameId (if not provided, resolved dynamically via JSON-WS)
         if (name === 'create_ddm_template') {
             const templateName = input?.name;
             const script = input?.script;
             const groupId = input?.groupId || siteId;
-            const classNameId = input?.classNameId;
-            const classPK = input?.classPK;
-            const resourceClassNameId = input?.resourceClassNameId;
 
-            if (!templateName || !script || !classNameId || !classPK || !resourceClassNameId) {
-                return { error: 'Missing required fields: name, script, classNameId, classPK, resourceClassNameId' };
+            if (!templateName || !script) {
+                return { error: 'Missing required fields: name, script. Use get_content_structures to find the structure_id.' };
+            }
+
+            // Resolve structure_id from structure_name if provided
+            let resolvedStructureId = input?.structure_id;
+            if (!resolvedStructureId && input?.structure_name) {
+                resolvedStructureId = await resolveStructureIdByName(base, siteId, input.structure_name, user, pass);
+                if (!resolvedStructureId) return { error: `Content structure "${input.structure_name}" not found. Use get_content_structures to see available structures.` };
             }
 
             try {
-                const tpl = await createDDMTemplateViaJsonWS({ baseUrl: base, groupId, classNameId, classPK, resourceClassNameId, name: templateName, description: input?.description || '', script, user, pass });
+                let classNameId = input?.classNameId;
+                let classPK = input?.classPK;
+                let resourceClassNameId = input?.resourceClassNameId;
+
+                // If structure_id is provided but classNameId/classPK/resourceClassNameId are not,
+                // resolve them dynamically via JSON-WS (classNameId=DDMStructure, resourceClassNameId=JournalArticle)
+                if ((!classNameId || !classPK || !resourceClassNameId) && resolvedStructureId) {
+                    const resolved = await resolveDDMTemplateParams({ baseUrl: base, structureId: resolvedStructureId, user, pass });
+                    classNameId = resolved.classNameId;
+                    classPK = resolved.classPK;
+                    resourceClassNameId = resolved.resourceClassNameId;
+                }
+
+                if (!classNameId || !classPK || !resourceClassNameId) {
+                    return { error: 'Missing structure_id/structure_name (recommended) or explicitly pass classNameId, classPK, resourceClassNameId. Use get_content_structures to find the structure_id.' };
+                }
+
+                const tpl = await createDDMTemplateViaJsonWS({ baseUrl: base, groupId, classNameId, classPK, resourceClassNameId, name: templateName, description: input?.description || '', script, type: input?.type || 'display', language: input?.language || 'ftl', user, pass });
                 return { success: true, template: tpl };
+            } catch (e) {
+                return { error: e.message || String(e) };
+            }
+        }
+
+        // Delete a DDM FreeMarker template via JSON-WS
+        if (name === 'delete_ddm_template') {
+            const templateId = input?.template_id;
+            if (!templateId) {
+                return { error: 'Missing required field: template_id. Provide the templateId of the template to delete.' };
+            }
+            try {
+                const result = await deleteDDMTemplateViaJsonWS({ baseUrl: base, templateId, user, pass });
+                return { success: true, deleted: true, templateId: result.templateId };
             } catch (e) {
                 return { error: e.message || String(e) };
             }
@@ -1032,7 +1119,13 @@ export async function executeTool(name, input, cfg) {
 
         if (name === 'create_structured_content') {
             if (!input?.title) return { error: 'title obbligatorio per creare un contenuto strutturato.' };
-            if (!input?.content_structure_id) return { error: 'content_structure_id obbligatorio. Usa get_content_structures per trovarlo.' };
+            // Resolve content_structure_id from content_structure_name if provided
+            let resolvedStructureId = input?.content_structure_id;
+            if (!resolvedStructureId && input?.content_structure_name) {
+                resolvedStructureId = await resolveStructureIdByName(base, siteId, input.content_structure_name, user, pass);
+                if (!resolvedStructureId) return { error: `Content structure "${input.content_structure_name}" not found. Use get_content_structures to see available structures.` };
+            }
+            if (!resolvedStructureId) return { error: 'content_structure_id or content_structure_name required. Use get_content_structures to find it.' };
 
             // Usa la lingua default del portale e tutte le lingue disponibili
             const lang = window.Liferay?.ThemeDisplay?.getDefaultLanguageId?.() || 'en_US';
@@ -1056,7 +1149,7 @@ export async function executeTool(name, input, cfg) {
                 allLangs = [lang]; // ultimate fallback: just the default language
             }
             dbg(`create_structured_content: defaultLang=${lang}, allLangs=${allLangs.join(',')}`);
-            const structureId = input.content_structure_id;
+            const structureId = resolvedStructureId;
             const title = input.title;
             const inputFields = input.fields || [];
 
