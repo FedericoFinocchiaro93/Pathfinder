@@ -62,6 +62,7 @@ This is where Pathfinder AI truly shines. Every CRUD operation across your Lifer
 - **Browse taxonomies** conversationally: *"Show me all categories under Organization"*, *"What vocabularies exist?"*
 - **Deep content inspection** — retrieve full structured content by ID, explore DDM structure fields and their data types
 - **Full-text search** powered by Liferay's Search API with filters, sorting, and pagination
+- **SXP Blueprints & Elements** — create, configure, and manage Search Experiences blueprints with advanced Elasticsearch filters: DDM structure keys, asset category IDs, and custom ES query clauses (terms, range, match, exists, bool, etc.)
 
 ---
 
@@ -101,6 +102,13 @@ This is where Pathfinder AI truly shines. Every CRUD operation across your Lifer
 
 ---
 
+### 🔎 SXP Blueprints & Elements (Search Experiences)
+- **Full CRUD** on SXP Blueprints and Elements — create, update, delete, list, inspect
+- **Advanced filtering** — combine DDM structure keys, asset category IDs, and custom Elasticsearch clauses (terms, range, match, exists, bool) in a single blueprint
+- **Flexible boolean logic** — `filter` (AND), `should` (OR), `must` (AND + scoring), `must_not` (exclude)
+
+---
+
 ## 🚧 Beta & Continuous Improvement
 
 Some features of Pathfinder AI are currently in beta and are continuously evolving.  
@@ -137,10 +145,11 @@ Switch providers at any time from the settings ⚙ — the conversation continue
 │         (dispatch, retry, fallback)              │
 ├──────────────────────────────────────────────────┤
 │               Tool Executor                       │
-│         30+ Liferay Headless tools               │
+│         40+ Liferay Headless tools               │
 ├──────────────────────────────────────────────────┤
 │            Liferay DXP Headless APIs              │
 │   Delivery · Admin User · Taxonomy · Search      │
+│   Search Experiences (SXP) · JSON-WS             │
 └──────────────────────────────────────────────────┘
 ```
 
@@ -175,7 +184,7 @@ Switch providers at any time from the settings ⚙ — the conversation continue
 
 ## 🛠️ Liferay Tools
 
-Pathfinder AI can execute **30+ operations** on your Liferay portal through Headless APIs:
+Pathfinder AI can execute **40+ operations** on your Liferay portal through Headless APIs:
 
 | Category | CRUD Operations | Search / Read |
 |----------|----------------|---------------|
@@ -190,7 +199,8 @@ Pathfinder AI can execute **30+ operations** on your Liferay portal through Head
 | **User Groups** | Create, update, delete user groups | — |
 | **Objects** | Create Object Definitions with typed fields; full CRUD on entries (company, site, Space-scoped) | — |
 | **Spaces (CMS)** | Create, update, delete Spaces; connect/disconnect to sites; assign/remove users | List all Spaces |
-| **Advanced Search** | — | Filters, sorting, pagination via Search API |
+| **SXP Blueprints** | Create, update, delete Search Experience blueprints with filters (structure, categories, custom ES clauses) | List, get blueprints; get structure keys |
+| **SXP Elements** | Create, update, delete Search Experience filter elements | List, get elements |
 
 ---
 
