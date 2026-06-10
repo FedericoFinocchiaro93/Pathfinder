@@ -5,7 +5,7 @@
 Pathfinder AI turns your Liferay portal into a conversational powerhouse. Everything happens through a natural chat interface: create content, manage users, build pages, modify taxonomies, handle objects — just type what you need. No forms, no admin panels, no friction. It's like having a Liferay expert available 24/7 in a chat window.
 
 <div align="center">
-  <img src="./.doc/screenshot/Screenshot 2026-06-09 143245.png" alt="Pathfinder AI" width="600"/>
+  <img src="./assets/img/Screenshot 2026-06-09 143245.png" alt="Pathfinder AI" width="600"/>
 </div>
 
 ---
