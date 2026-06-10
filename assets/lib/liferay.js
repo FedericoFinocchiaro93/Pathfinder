@@ -421,4 +421,419 @@ export async function liferayEnsureFolder(baseUrl, siteId, folderName, parentFol
     return liferayCreateFolder(baseUrl, siteId, folderName, parentFolderId, user, pass);
 }
 
+/**
+ * Get the structureKey of a DDM Structure via JSON-WS.
+ * The structureKey is different from the structureId (e.g. structureId=36377, structureKey="36376").
+ * The structureKey is needed for SXP Blueprint filters (ddmStructureKey field).
+ */
+export async function getStructureKeyViaJsonWS({ baseUrl, structureId, user, pass }) {
+    const token = getLiferayToken();
+    const params = new URLSearchParams();
+    if (token) params.append('p_auth', token);
+    params.append('structureId', String(structureId));
+
+    const url = baseUrl.replace(/\/$/, '') + '/api/jsonws/ddm.ddmstructure/get-structure';
+    const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+    if (user && pass) {
+        headers['Authorization'] = 'Basic ' + btoa(user + ':' + pass);
+    } else if (token) {
+        headers['x-csrf-token'] = token;
+    }
+
+    dbg('JSONWS get-structure', url, { structureId });
+
+    const res = await fetch(url, { method: 'POST', credentials: 'same-origin', headers, body: params.toString() });
+    if (!res.ok) {
+        const bodyText = await res.text().catch(() => '');
+        throw new Error(`JSONWS get-structure failed: HTTP ${res.status} ${res.statusText} — ${bodyText.substring(0, 2000)}`);
+    }
+    const data = await res.json();
+    return {
+        structureId: data.structureId,
+        structureKey: data.structureKey,
+        name: data.nameCurrentValue || data.name,
+        groupId: data.groupId,
+    };
+}
+
+/**
+ * List all SXP Blueprints via Search Experiences REST API.
+ */
+export async function listSxpBlueprints({ baseUrl, pageSize = 20, user, pass }) {
+    return await liferayGet(baseUrl, `/o/search-experiences-rest/v1.0/sxp-blueprints?pageSize=${pageSize}`, user, pass);
+}
+
+/**
+ * Get a single SXP Blueprint by ID.
+ */
+export async function getSxpBlueprint({ baseUrl, blueprintId, user, pass }) {
+    return await liferayGet(baseUrl, `/o/search-experiences-rest/v1.0/sxp-blueprints/${blueprintId}`, user, pass);
+}
+
+/**
+ * Create an SXP Blueprint via Search Experiences REST API.
+ * Uses a 2-step process: POST to create without elementInstances, then PUT to add elementInstances.
+ * This avoids a 500 error when creating with elementInstances directly.
+ */
+export async function createSxpBlueprint({ baseUrl, title, description = '', filterDdmStructureKeys = [], filterCategoryIds = [], customFilterClauses = [], searchableAssetTypes = [], collectionProviderType = 'com.liferay.asset.kernel.model.AssetEntry', scopeGroupIds = [], user, pass }) {
+    // Step 1: Create blueprint WITHOUT elementInstances (causes 500 if included in POST)
+    const createBody = {
+        title,
+        title_i18n: { 'en-US': title, 'it-IT': title },
+        description,
+        description_i18n: { 'en-US': description, 'it-IT': description },
+        schemaVersion: '1.2',
+        configuration: {
+            generalConfiguration: {
+                clauseContributorsIncludes: ['*'],
+                clauseContributorsExcludes: [],
+                collectionProvider: false,
+                collectionProviderType,
+                scope: scopeGroupIds.map(id => ({ groupId: id })),
+                searchableAssetTypes,
+            },
+            queryConfiguration: { applyIndexerClauses: true },
+            aggregationConfiguration: {},
+            sortConfiguration: {},
+            highlightConfiguration: {},
+            advancedConfiguration: {},
+            parameterConfiguration: {},
+        },
+    };
+
+    const created = await liferayPost(baseUrl, '/o/search-experiences-rest/v1.0/sxp-blueprints', createBody, user, pass);
+
+    // Step 2: If we have filter criteria, update with elementInstances via PUT
+    // IMPORTANT: All filter criteria go into ONE element with multiple clauses.
+    // ddmStructureKeys use "terms" filter, categoryNames use "terms" filter on assetCategoryNames.
+    // Multiple clauses with occur="filter" are ANDed together.
+    const hasFilters = filterDdmStructureKeys.length > 0 || filterCategoryIds.length > 0 || customFilterClauses.length > 0;
+    if (hasFilters) {
+        const filterParts = [];
+        if (filterDdmStructureKeys.length > 0) filterParts.push(`DDM ${filterDdmStructureKeys.join(', ')}`);
+        if (filterCategoryIds.length > 0) filterParts.push(`Category ${filterCategoryIds.join(', ')}`);
+        if (customFilterClauses.length > 0) filterParts.push(`Custom (${customFilterClauses.length} clauses)`);
+        const keysLabel = filterParts.join(' + ');
+
+        // Build clauses for all filters
+        const clauses = [];
+        if (filterDdmStructureKeys.length > 0) {
+            clauses.push({
+                occur: 'filter',
+                query: { terms: { ddmStructureKey: filterDdmStructureKeys } },
+                context: 'query',
+            });
+        }
+        if (filterCategoryIds.length > 0) {
+            clauses.push({
+                occur: 'filter',
+                query: { terms: { assetCategoryIds: filterCategoryIds } },
+                context: 'query',
+            });
+        }
+        // Add custom filter clauses
+        for (const clause of customFilterClauses) {
+            clauses.push({
+                occur: clause.occur || 'filter',
+                query: clause.query,
+                context: clause.context || 'query',
+            });
+        }
+
+        const elementInstance = {
+            sxpElement: {
+                schemaVersion: '1.0',
+                title: `Filter by ${keysLabel}`,
+                title_i18n: { 'en-US': `Filter by ${keysLabel}`, 'it-IT': `Filtro per ${keysLabel}` },
+                description: `Filters search results by: ${keysLabel}`,
+                description_i18n: { 'en-US': `Filters search results by: ${keysLabel}`, 'it-IT': `Filtra i risultati di ricerca per: ${keysLabel}` },
+                readOnly: false,
+                type: 0,
+                version: '1,0',
+                externalReferenceCode: `FILTER_${filterDdmStructureKeys.length > 0 ? 'DDM_' + filterDdmStructureKeys.join('_') : ''}${filterCategoryIds.length > 0 ? '_CAT_' + filterCategoryIds.join('_') : ''}`,
+                elementDefinition: {
+                    uiConfiguration: {},
+                    configuration: {
+                        queryConfiguration: {
+                            queryEntries: [{ clauses }],
+                        },
+                    },
+                    icon: 'filter',
+                    category: 'filter',
+                },
+            },
+            configurationEntry: {
+                queryConfiguration: {
+                    queryEntries: [{ clauses }],
+                },
+            },
+            uiConfigurationValues: {},
+        };
+
+        const updateBody = {
+            ...created,
+            elementInstances: [elementInstance],
+        };
+
+        const updated = await liferayPut(baseUrl, `/o/search-experiences-rest/v1.0/sxp-blueprints/${created.id}`, updateBody, user, pass);
+        return updated;
+    }
+
+    return created;
+}
+
+/**
+ * Update an SXP Blueprint via Search Experiences REST API (PUT).
+ * Replaces elementInstances completely — provide all desired elements.
+ */
+export async function updateSxpBlueprint({ baseUrl, blueprintId, title, description, filterDdmStructureKeys, filterCategoryIds, customFilterClauses, searchableAssetTypes, collectionProviderType, scopeGroupIds, user, pass }) {
+    // First get current blueprint
+    const current = await getSxpBlueprint({ baseUrl, blueprintId, user, pass });
+
+    const updateBody = { ...current };
+
+    if (title !== undefined) {
+        updateBody.title = title;
+        updateBody.title_i18n = { 'en-US': title, 'it-IT': title };
+    }
+    if (description !== undefined) {
+        updateBody.description = description;
+        updateBody.description_i18n = { 'en-US': description, 'it-IT': description };
+    }
+
+    // Update configuration
+    if (!updateBody.configuration) {
+        updateBody.configuration = {
+            generalConfiguration: {},
+            queryConfiguration: { applyIndexerClauses: true },
+            aggregationConfiguration: {},
+            sortConfiguration: {},
+            highlightConfiguration: {},
+            advancedConfiguration: {},
+            parameterConfiguration: {},
+        };
+    }
+    if (!updateBody.configuration.generalConfiguration) {
+        updateBody.configuration.generalConfiguration = {};
+    }
+
+    if (collectionProviderType !== undefined) {
+        updateBody.configuration.generalConfiguration.collectionProviderType = collectionProviderType;
+    }
+    if (searchableAssetTypes !== undefined) {
+        updateBody.configuration.generalConfiguration.searchableAssetTypes = searchableAssetTypes;
+    }
+    if (scopeGroupIds !== undefined) {
+        updateBody.configuration.generalConfiguration.scope = scopeGroupIds.map(id => ({ groupId: id }));
+    }
+
+    // Update elementInstances if filter criteria provided
+    // IMPORTANT: All filter criteria go into ONE element with multiple clauses.
+    // ddmStructureKeys use "terms" filter, categoryIds use "terms" filter on assetCategoryIds.
+    // customFilterClauses allow arbitrary Elasticsearch queries.
+    // Multiple clauses with occur="filter" are ANDed together.
+    const hasFilterDdm = filterDdmStructureKeys !== undefined;
+    const hasFilterCat = filterCategoryIds !== undefined;
+    const hasCustomClauses = customFilterClauses !== undefined;
+    if (hasFilterDdm || hasFilterCat || hasCustomClauses) {
+        const ddmKeys = filterDdmStructureKeys || [];
+        const catIds = filterCategoryIds || [];
+        const customClauses = customFilterClauses || [];
+        if (ddmKeys.length === 0 && catIds.length === 0 && customClauses.length === 0) {
+            updateBody.elementInstances = [];
+        } else {
+            const filterParts = [];
+            if (ddmKeys.length > 0) filterParts.push(`DDM ${ddmKeys.join(', ')}`);
+            if (catIds.length > 0) filterParts.push(`Category ${catIds.join(', ')}`);
+            if (customClauses.length > 0) filterParts.push(`Custom (${customClauses.length} clauses)`);
+            const keysLabel = filterParts.join(' + ');
+
+            // Build clauses for all filters
+            const clauses = [];
+            if (ddmKeys.length > 0) {
+                clauses.push({
+                    occur: 'filter',
+                    query: { terms: { ddmStructureKey: ddmKeys } },
+                    context: 'query',
+                });
+            }
+            if (catIds.length > 0) {
+                clauses.push({
+                    occur: 'filter',
+                    query: { terms: { assetCategoryIds: catIds } },
+                    context: 'query',
+                });
+            }
+            // Add custom filter clauses
+            for (const clause of customClauses) {
+                clauses.push({
+                    occur: clause.occur || 'filter',
+                    query: clause.query,
+                    context: clause.context || 'query',
+                });
+            }
+
+            updateBody.elementInstances = [{
+                sxpElement: {
+                    schemaVersion: '1.0',
+                    title: `Filter by ${keysLabel}`,
+                    title_i18n: { 'en-US': `Filter by ${keysLabel}`, 'it-IT': `Filtro per ${keysLabel}` },
+                    description: `Filters search results by: ${keysLabel}`,
+                    description_i18n: { 'en-US': `Filters search results by: ${keysLabel}`, 'it-IT': `Filtra i risultati di ricerca per: ${keysLabel}` },
+                    readOnly: false,
+                    type: 0,
+                    version: '1,0',
+                    externalReferenceCode: `FILTER_${ddmKeys.length > 0 ? 'DDM_' + ddmKeys.join('_') : ''}${catIds.length > 0 ? '_CAT_' + catIds.join('_') : ''}`,
+                    elementDefinition: {
+                        uiConfiguration: {},
+                        configuration: {
+                            queryConfiguration: {
+                                queryEntries: [{ clauses }],
+                            },
+                        },
+                        icon: 'filter',
+                        category: 'filter',
+                    },
+                },
+                configurationEntry: {
+                    queryConfiguration: {
+                        queryEntries: [{ clauses }],
+                    },
+                },
+                uiConfigurationValues: {},
+            }];
+        }
+    }
+
+    return await liferayPut(baseUrl, `/o/search-experiences-rest/v1.0/sxp-blueprints/${blueprintId}`, updateBody, user, pass);
+}
+
+/**
+ * Delete an SXP Blueprint via Search Experiences REST API.
+ */
+export async function deleteSxpBlueprint({ baseUrl, blueprintId, user, pass }) {
+    return await liferayDelete(baseUrl, `/o/search-experiences-rest/v1.0/sxp-blueprints/${blueprintId}`, user, pass);
+}
+
+/**
+ * List all SXP Elements via Search Experiences REST API.
+ */
+export async function listSxpElements({ baseUrl, pageSize = 50, user, pass }) {
+    return await liferayGet(baseUrl, `/o/search-experiences-rest/v1.0/sxp-elements?pageSize=${pageSize}`, user, pass);
+}
+
+/**
+ * Get a single SXP Element by ID.
+ */
+export async function getSxpElement({ baseUrl, elementId, user, pass }) {
+    return await liferayGet(baseUrl, `/o/search-experiences-rest/v1.0/sxp-elements/${elementId}`, user, pass);
+}
+
+/**
+ * Create an SXP Element via Search Experiences REST API.
+ * Supports simple filter creation (filter_field + filter_values) or custom Elasticsearch queries.
+ */
+export async function createSxpElement({ baseUrl, title, titleI18n, description, descriptionI18n, externalReferenceCode, type = 0, category = 'filter', icon = 'filter', filterField, filterValues, customQuery, user, pass }) {
+    // Build query from filter_field/filter_values or custom_query
+    let queryConfig;
+    if (customQuery) {
+        queryConfig = customQuery;
+    } else if (filterField && filterValues) {
+        queryConfig = filterValues.length === 1
+            ? { term: { [filterField]: filterValues[0] } }
+            : { terms: { [filterField]: filterValues } };
+    } else {
+        queryConfig = { terms: { ddmStructureKey: [] } }; // empty default
+    }
+
+    const body = {
+        title,
+        title_i18n: titleI18n || { 'en-US': title },
+        description: description || '',
+        description_i18n: descriptionI18n || { 'en-US': description || '' },
+        externalReferenceCode,
+        schemaVersion: '1.0',
+        type,
+        version: '1,0',
+        readOnly: false,
+        elementDefinition: {
+            uiConfiguration: {},
+            configuration: {
+                queryConfiguration: {
+                    queryEntries: [{
+                        clauses: [{
+                            occur: 'filter',
+                            query: queryConfig,
+                            context: 'query',
+                        }],
+                    }],
+                },
+            },
+            icon,
+            category,
+        },
+    };
+
+    return await liferayPost(baseUrl, '/o/search-experiences-rest/v1.0/sxp-elements', body, user, pass);
+}
+
+/**
+ * Update an SXP Element via Search Experiences REST API.
+ * NOTE: The SXP Elements PUT endpoint has known issues (returns 400).
+ * This function uses a delete+recreate approach as a workaround.
+ * The externalReferenceCode is preserved from the original element.
+ */
+export async function updateSxpElement({ baseUrl, elementId, title, description, filterField, filterValues, customQuery, user, pass }) {
+    // Get current element to preserve its externalReferenceCode and other fields
+    const current = await getSxpElement({ baseUrl, elementId, user, pass });
+
+    const erc = current.externalReferenceCode;
+    const newTitle = title !== undefined ? title : current.title;
+    const newDescription = description !== undefined ? description : current.description;
+
+    // Build query config
+    let queryConfig;
+    if (customQuery) {
+        queryConfig = customQuery;
+    } else if (filterField && filterValues) {
+        queryConfig = filterValues.length === 1
+            ? { term: { [filterField]: filterValues[0] } }
+            : { terms: { [filterField]: filterValues } };
+    } else {
+        // Preserve existing query if no new query provided
+        queryConfig = current.elementDefinition?.configuration?.queryConfiguration?.queryEntries?.[0]?.clauses?.[0]?.query
+            || { terms: { ddmStructureKey: [] } };
+    }
+
+    // Delete the old element
+    await deleteSxpElement({ baseUrl, elementId, user, pass });
+
+    // Recreate with updated values
+    const newElement = await createSxpElement({
+        baseUrl,
+        title: newTitle,
+        titleI18n: current.title_i18n,
+        description: newDescription,
+        descriptionI18n: current.description_i18n,
+        externalReferenceCode: erc,
+        type: current.type ?? 0,
+        category: current.elementDefinition?.category || 'filter',
+        icon: current.elementDefinition?.icon || 'filter',
+        filterField,
+        filterValues,
+        customQuery: customQuery ? queryConfig : undefined,
+        user,
+        pass,
+    });
+
+    return newElement;
+}
+
+/**
+ * Delete an SXP Element via Search Experiences REST API.
+ */
+export async function deleteSxpElement({ baseUrl, elementId, user, pass }) {
+    return await liferayDelete(baseUrl, `/o/search-experiences-rest/v1.0/sxp-elements/${elementId}`, user, pass);
+}
+
 export { ENRICH_FRIENDLY_LIMIT, getCachedResponse, setCachedResponse };

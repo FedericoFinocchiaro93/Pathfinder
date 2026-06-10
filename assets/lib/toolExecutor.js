@@ -10,6 +10,9 @@ import {
     parseStructuredContentItem,
     fetchApiList, fetchApiSpec,
     liferayEnsureFolder,
+    getStructureKeyViaJsonWS,
+    listSxpBlueprints, getSxpBlueprint, createSxpBlueprint, updateSxpBlueprint, deleteSxpBlueprint,
+    listSxpElements, getSxpElement, createSxpElement, updateSxpElement, deleteSxpElement,
     ENRICH_FRIENDLY_LIMIT,
     getCachedResponse, setCachedResponse,
 } from './liferay.js';
@@ -121,6 +124,9 @@ const NO_SITE_TOOLS = new Set([
     'generate_excel_template',
     'get_content_structure_fields',
     'create_ddm_template', 'delete_ddm_template',
+    'get_structure_key',
+    'list_sxp_blueprints', 'get_sxp_blueprint', 'create_sxp_blueprint', 'update_sxp_blueprint', 'delete_sxp_blueprint',
+    'list_sxp_elements', 'get_sxp_element', 'create_sxp_element', 'update_sxp_element', 'delete_sxp_element',
     'update_space', 'delete_space', 'create_space', 'connect_space_site', 'disconnect_space_site',
     'assign_user_to_space', 'remove_user_from_space',
 ]);
@@ -458,6 +464,198 @@ export async function executeTool(name, input, cfg) {
             try {
                 const result = await deleteDDMTemplateViaJsonWS({ baseUrl: base, templateId, user, pass });
                 return { success: true, deleted: true, templateId: result.templateId };
+            } catch (e) {
+                return { error: e.message || String(e) };
+            }
+        }
+
+        // ── GET STRUCTURE KEY ──────────────────────────────────────────────────
+        // Retrieves the DDM structureKey (different from structureId) via JSON-WS
+        if (name === 'get_structure_key') {
+            // Resolve structure_id from structure_name if provided
+            let structureId = input?.structure_id;
+            if (!structureId && input?.structure_name) {
+                structureId = await resolveStructureIdByName(base, siteId, input.structure_name, user, pass);
+                if (!structureId) return { error: `Content structure "${input.structure_name}" not found. Use get_content_structures to see available structures.` };
+            }
+            if (!structureId) return { error: 'structure_id or structure_name required. Use get_content_structures to find it.' };
+            try {
+                const result = await getStructureKeyViaJsonWS({ baseUrl: base, structureId, user, pass });
+                return {
+                    structureId: result.structureId,
+                    structureKey: result.structureKey,
+                    name: result.name,
+                    groupId: result.groupId,
+                    message: `La structureKey per la struttura "${result.name}" (ID: ${result.structureId}) è "${result.structureKey}". Usa questo valore come ddmStructureKey nei filtri SXP Blueprint.`,
+                };
+            } catch (e) {
+                return { error: `Errore nel recupero della structureKey: ${e.message || String(e)}` };
+            }
+        }
+
+        // ── SXP BLUEPRINT TOOLS ──────────────────────────────────────────────────
+
+        // List all SXP Blueprints
+        if (name === 'list_sxp_blueprints') {
+            try {
+                const result = await listSxpBlueprints({ baseUrl: base, pageSize: input?.page_size || 20, user, pass });
+                return result;
+            } catch (e) {
+                return { error: e.message || String(e) };
+            }
+        }
+
+        // Get a single SXP Blueprint by ID
+        if (name === 'get_sxp_blueprint') {
+            const blueprintId = input?.blueprint_id;
+            if (!blueprintId) return { error: 'blueprint_id obbligatorio.' };
+            try {
+                const result = await getSxpBlueprint({ baseUrl: base, blueprintId, user, pass });
+                return result;
+            } catch (e) {
+                return { error: e.message || String(e) };
+            }
+        }
+
+        // Create a new SXP Blueprint
+        if (name === 'create_sxp_blueprint') {
+            const title = input?.title;
+            if (!title) return { error: 'title obbligatorio.' };
+            try {
+                const result = await createSxpBlueprint({
+                    baseUrl: base,
+                    title,
+                    description: input?.description || '',
+                    filterDdmStructureKeys: input?.filter_ddm_structure_keys || [],
+                    filterCategoryIds: input?.filter_category_ids || [],
+                    customFilterClauses: input?.custom_filter_clauses || [],
+                    searchableAssetTypes: input?.searchable_asset_types || [],
+                    collectionProviderType: input?.collection_provider_type || 'com.liferay.asset.kernel.model.AssetEntry',
+                    scopeGroupIds: input?.scope_group_ids || [],
+                    user, pass,
+                });
+                return { success: true, blueprint: result };
+            } catch (e) {
+                return { error: e.message || String(e) };
+            }
+        }
+
+        // Update an existing SXP Blueprint
+        if (name === 'update_sxp_blueprint') {
+            const blueprintId = input?.blueprint_id;
+            if (!blueprintId) return { error: 'blueprint_id obbligatorio.' };
+            try {
+                const result = await updateSxpBlueprint({
+                    baseUrl: base,
+                    blueprintId,
+                    title: input?.title,
+                    description: input?.description,
+                    filterDdmStructureKeys: input?.filter_ddm_structure_keys,
+                    filterCategoryIds: input?.filter_category_ids,
+                    customFilterClauses: input?.custom_filter_clauses,
+                    searchableAssetTypes: input?.searchable_asset_types,
+                    collectionProviderType: input?.collection_provider_type,
+                    scopeGroupIds: input?.scope_group_ids,
+                    user, pass,
+                });
+                return { success: true, blueprint: result };
+            } catch (e) {
+                return { error: e.message || String(e) };
+            }
+        }
+
+        // Delete an SXP Blueprint
+        if (name === 'delete_sxp_blueprint') {
+            const blueprintId = input?.blueprint_id;
+            if (!blueprintId) return { error: 'blueprint_id obbligatorio.' };
+            try {
+                await deleteSxpBlueprint({ baseUrl: base, blueprintId, user, pass });
+                return { success: true, deleted: true, blueprintId };
+            } catch (e) {
+                return { error: e.message || String(e) };
+            }
+        }
+
+        // ── SXP ELEMENT TOOLS ──────────────────────────────────────────────────
+
+        // List all SXP Elements
+        if (name === 'list_sxp_elements') {
+            try {
+                const result = await listSxpElements({ baseUrl: base, pageSize: input?.page_size || 50, user, pass });
+                return result;
+            } catch (e) {
+                return { error: e.message || String(e) };
+            }
+        }
+
+        // Get a single SXP Element by ID
+        if (name === 'get_sxp_element') {
+            const elementId = input?.element_id;
+            if (!elementId) return { error: 'element_id obbligatorio.' };
+            try {
+                const result = await getSxpElement({ baseUrl: base, elementId, user, pass });
+                return result;
+            } catch (e) {
+                return { error: e.message || String(e) };
+            }
+        }
+
+        // Create a new SXP Element
+        if (name === 'create_sxp_element') {
+            const title = input?.title;
+            const erc = input?.external_reference_code;
+            if (!title) return { error: 'title obbligatorio.' };
+            if (!erc) return { error: 'external_reference_code obbligatorio. Deve essere univoco, solo lettere maiuscole, numeri e underscore. Es. "FILTER_BY_PROJECT_STRUCTURE".' };
+            try {
+                const result = await createSxpElement({
+                    baseUrl: base,
+                    title,
+                    titleI18n: input?.title_i18n,
+                    description: input?.description || '',
+                    descriptionI18n: input?.description_i18n,
+                    externalReferenceCode: erc,
+                    type: input?.type ?? 0,
+                    category: input?.category || 'filter',
+                    icon: input?.icon || 'filter',
+                    filterField: input?.filter_field,
+                    filterValues: input?.filter_values,
+                    customQuery: input?.custom_query,
+                    user, pass,
+                });
+                return { success: true, element: result };
+            } catch (e) {
+                return { error: e.message || String(e) };
+            }
+        }
+
+        // Update an existing SXP Element
+        if (name === 'update_sxp_element') {
+            const elementId = input?.element_id;
+            if (!elementId) return { error: 'element_id obbligatorio.' };
+            try {
+                const result = await updateSxpElement({
+                    baseUrl: base,
+                    elementId,
+                    title: input?.title,
+                    description: input?.description,
+                    filterField: input?.filter_field,
+                    filterValues: input?.filter_values,
+                    customQuery: input?.custom_query,
+                    user, pass,
+                });
+                return { success: true, element: result };
+            } catch (e) {
+                return { error: e.message || String(e) };
+            }
+        }
+
+        // Delete an SXP Element
+        if (name === 'delete_sxp_element') {
+            const elementId = input?.element_id;
+            if (!elementId) return { error: 'element_id obbligatorio.' };
+            try {
+                await deleteSxpElement({ baseUrl: base, elementId, user, pass });
+                return { success: true, deleted: true, elementId };
             } catch (e) {
                 return { error: e.message || String(e) };
             }
