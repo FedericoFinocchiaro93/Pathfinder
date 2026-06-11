@@ -3,34 +3,13 @@
  * Uses the xlsx library (already loaded for parsing) to create template files.
  */
 
-// ── XLSX loader (same pattern as ChatbotFullpage.jsx) ──
+// ── XLSX loader (CDN-only — npm xlsx is unmaintained & vulnerable) ──
 let _XLSX = null;
 async function _loadXLSX() {
     if (_XLSX) return _XLSX;
-    // Try the npm-bundled version first
-    try {
-        const mod = await import('xlsx');
-        // Webpack ESM dynamic import returns a Module Namespace Object.
-        // The actual XLSX object may be at mod.default or directly on mod.
-        // Check for key functions to determine the correct reference.
-        if (mod && mod.utils && typeof mod.utils.book_new === 'function') {
-            _XLSX = mod;
-        } else if (mod && mod.default && mod.default.utils && typeof mod.default.utils.book_new === 'function') {
-            _XLSX = mod.default;
-        } else if (mod && mod.default && typeof mod.default.read === 'function') {
-            _XLSX = mod.default;
-        } else {
-            // Last resort: try using the module as-is
-            _XLSX = mod;
-        }
-        console.log('[excelTemplate] xlsx loaded via import, has utils:', !!_XLSX?.utils, 'has read:', typeof _XLSX?.read);
-        return _XLSX;
-    } catch (e) {
-        console.warn('[excelTemplate] npm xlsx import failed, loading from CDN...', e);
-    }
-    // Fallback: check window.XLSX (already loaded by ChatbotFullpage)
+    // Check if already loaded on window (by ChatbotFullpage or another component)
     if (window.XLSX) { _XLSX = window.XLSX; return _XLSX; }
-    // Fallback: load from CDN
+    // Load from CDN — the npm package is unmaintained and vulnerable to Prototype Pollution
     return new Promise((resolve, reject) => {
         const script = document.createElement('script');
         script.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';

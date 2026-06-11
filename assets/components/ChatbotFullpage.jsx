@@ -12,29 +12,13 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
-// XLSX is loaded dynamically from CDN to avoid webpack bundling issues
+// XLSX is loaded from CDN (SheetJS CE 0.20.3+) to avoid the npm xlsx
+// Prototype Pollution vulnerability (CVE in all versions < 0.19.3, npm pkg unmaintained).
+// See: https://github.com/advisories/GHSA-4r6h-8v4j-7f4v
 let _XLSX = null;
 async function loadXLSX() {
     if (_XLSX) return _XLSX;
-    // Try the npm-bundled version first
-    try {
-        const mod = await import('xlsx');
-        // Webpack ESM dynamic import returns a Module Namespace Object.
-        // The actual XLSX object may be at mod.default or directly on mod.
-        if (mod && mod.utils && typeof mod.utils.book_new === 'function') {
-            _XLSX = mod;
-        } else if (mod && mod.default && mod.default.utils && typeof mod.default.utils.book_new === 'function') {
-            _XLSX = mod.default;
-        } else if (mod && mod.default && typeof mod.default.read === 'function') {
-            _XLSX = mod.default;
-        } else {
-            _XLSX = mod;
-        }
-        return _XLSX;
-    } catch (e) {
-        console.warn('[Excel] npm xlsx import failed, loading from CDN...', e);
-    }
-    // Fallback: load from CDN
+    // Load from CDN — the npm package is unmaintained and vulnerable
     return new Promise((resolve, reject) => {
         if (window.XLSX) { _XLSX = window.XLSX; return resolve(_XLSX); }
         const script = document.createElement('script');
