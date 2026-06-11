@@ -25,6 +25,13 @@ This is where Pathfinder AI truly shines. Every CRUD operation across your Lifer
 - **Create pages** — content pages, widget pages, child pages, with master page templates — all from a single message
 - **Search and browse pages** across your portal hierarchy
 
+> ⚠️ **Liferay requires feature flag `LPS-178052`**
+
+ — Page creation via Headless API returns `UnsupportedOperationException` unless you add this to `portal-ext.properties`:
+> ```
+> feature.flag.LPS-178052=true
+> ```
+
 #### 👥 Users, Organizations & Groups
 - **Full user management** — create, update, deactivate, and delete users
 - **Manage organizations** — create, update, and delete organizational structures
