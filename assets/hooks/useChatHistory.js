@@ -21,6 +21,7 @@ import {
     getBaseUrl,
     liferayGet,
     liferayPost,
+    liferayPut,
     liferayPatch,
     liferayDelete,
 } from '../lib/liferay.js';
@@ -123,7 +124,15 @@ async function createObjectDefinition(base, user, pass) {
 function safeJson(value) {
     try {
         const s = JSON.stringify(value);
-        return s.length > MAX_JSON_CHARS ? JSON.stringify([]) : s;
+        if (s.length > MAX_JSON_CHARS) return JSON.stringify([]);
+        // Strip 4-byte UTF-8 chars (emoji, rare CJK) that MariaDB utf8 charset can't store.
+        // MariaDB utf8 = 3 bytes max; emoji need utf8mb4.
+        // Replace with JSON-safe surrogate pairs (\uD83D\uDE00) so JSON.parse works.
+        return s.replace(/[\ud800-\udbff][\udc00-\udfff]/g, (pair) => {
+            const hi = pair.charCodeAt(0);
+            const lo = pair.charCodeAt(1);
+            return `\\u${hi.toString(16).padStart(4, '0')}\\u${lo.toString(16).padStart(4, '0')}`;
+        });
     } catch {
         return JSON.stringify([]);
     }
@@ -270,19 +279,36 @@ export function useChatHistory(cfg) {
     }, [ready, base, user, pass]);
 
     // ── aggiorna la sessione corrente dopo ogni risposta ──────────────────────
+    // NOTE: Liferay Object API returns 500 on PATCH with LongText/Clob fields,
+    // ── aggiorna la sessione corrente dopo ogni risposta ──────────────────────
+    // Retry PATCH up to 3 times with short delay; if all fail, fall back to PUT.
     const updateSession = useCallback(async (messages, history) => {
         const id = currentSessionIdRef.current;
         if (!ready || !id) return;
+        const payload = {
+            messagesJson: safeJson(messages),
+            historyJson:  safeJson(history),
+        };
         try {
-            await liferayPatch(
-                base,
-                `${OBJ_PLURAL_URL}/${id}`,
-                {
-                    messagesJson: safeJson(messages),
-                    historyJson:  safeJson(history),
-                },
-                user, pass
-            );
+            let patched = false;
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                    await liferayPatch(base, `${OBJ_PLURAL_URL}/${id}`, payload, user, pass);
+                    patched = true;
+                    break;
+                } catch (err) {
+                    dbg(`[ChatHistory] PATCH attempt ${attempt} failed:`, err.message);
+                    if (attempt < 3) await new Promise(r => setTimeout(r, 500 * attempt));
+                }
+            }
+            if (!patched) {
+                dbg('[ChatHistory] All PATCH attempts failed, falling back to PUT');
+                await liferayPut(base, `${OBJ_PLURAL_URL}/${id}`, {
+                    title:        makeTitle(messages.find(m => m.role === 'user')?.text),
+                    ...payload,
+                    sessionDate:  new Date().toISOString().split('T')[0],
+                }, user, pass);
+            }
             dbg('[ChatHistory] Sessione aggiornata:', id);
         } catch (e) {
             dbg('[ChatHistory] updateSession error:', e.message);
