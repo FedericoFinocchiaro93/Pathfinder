@@ -2198,6 +2198,13 @@ ai-chatbot-fullpage {
     font-size: 12px;
 }
 
+.afp-config-hint {
+    color: var(--afp-text-muted, #888);
+    font-size: 11px;
+    line-height: 1.4;
+    padding: 4px 0 0 0;
+}
+
 .afp-config-refresh {
     padding: 4px 10px;
     border: 1px solid var(--afp-border);

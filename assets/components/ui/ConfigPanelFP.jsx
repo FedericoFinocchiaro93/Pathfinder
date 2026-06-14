@@ -5,9 +5,10 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { saveCfg }           from '../../lib/config.js';
-import { fetchOllamaModels } from '../../lib/llm/ollama.js';
-import { fetchOpenAIModels } from '../../lib/llm/openai.js';
+import { saveCfg }              from '../../lib/config.js';
+import { fetchOllamaModels }    from '../../lib/llm/ollama.js';
+import { fetchOpenAIModels }    from '../../lib/llm/openai.js';
+import { fetchAnthropicModels } from '../../lib/llm/anthropic.js';
 import { _apiSpecCache }     from '../../lib/cache.js';
 import { ensureFeedbackObject } from '../../lib/feedbackTracker.js';
 import EulaModalFP          from './EulaModalFP.jsx';
@@ -30,6 +31,9 @@ function ConfigPanelFP({ cfg, onSave, onBack, t }) {
     const [openaiModels,  setOpenaiModels]  = useState([]);
     const [openaiLoading, setOpenaiLoading] = useState(false);
     const [openaiError,   setOpenaiError]   = useState('');
+    const [anthropicModels, setAnthropicModels] = useState([]);
+    const [anthropicLoading, setAnthropicLoading] = useState(false);
+    const [anthropicError, setAnthropicError] = useState('');
     const [showEula,      setShowEula]      = useState(false);
 
     const set = useCallback((k, v) => setLocal((p) => ({ ...p, [k]: v })), []);
@@ -78,6 +82,24 @@ function ConfigPanelFP({ cfg, onSave, onBack, t }) {
         }
     }, [local]);
 
+    const handleLoadAnthropicModels = useCallback(async () => {
+        setAnthropicLoading(true);
+        setAnthropicError('');
+        try {
+            const models = await fetchAnthropicModels(local);
+            setAnthropicModels(models);
+            if (models.length > 0 && !local.model)
+                setLocal((p) => ({ ...p, model: models[0] }));
+            if (models.length === 0)
+                setAnthropicError(t.configAnthropicNoModels || 'Nessun modello trovato. Verifica API Key.');
+        } catch (e) {
+            setAnthropicError(e.message);
+            setAnthropicModels([]);
+        } finally {
+            setAnthropicLoading(false);
+        }
+    }, [local, t]);
+
     useEffect(() => {
         if (isOllama && ollamaModels.length === 0 && !ollamaError)
             handleLoadOllamaModels();
@@ -89,6 +111,12 @@ function ConfigPanelFP({ cfg, onSave, onBack, t }) {
             handleLoadOpenAIModels();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpenAICompatible]);
+
+    useEffect(() => {
+        if (isAnthropic && anthropicModels.length === 0 && !anthropicError && local.apiKey)
+            handleLoadAnthropicModels();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isAnthropic]);
 
     return (
         <div className="afp-config-overlay">
@@ -138,12 +166,33 @@ function ConfigPanelFP({ cfg, onSave, onBack, t }) {
                                     onChange={(e) => set('apiKey', e.target.value)} />
                             </div>
                             <div className="afp-config-row">
+                                <label className="afp-config-label">{t.configAnthropicProxy || 'Proxy URL'}</label>
+                                <input type="text" className="afp-config-input"
+                                    value={local.anthropicProxyUrl || ''} placeholder="https://your-server.com/o/anthropic-proxy"
+                                    onChange={(e) => set('anthropicProxyUrl', e.target.value)} />
+                                <div className="afp-config-hint">{t.configAnthropicProxyHint || 'Optional: leave empty for direct browser access. Set a proxy URL only if needed.'}</div>
+                            </div>
+                            <div className="afp-config-row">
                                 <label className="afp-config-label">{t.configClaudeModel}</label>
-                                <select className="afp-config-input" value={local.model}
-                                    onChange={(e) => set('model', e.target.value)}>
-                                    <option value="claude-sonnet-4-20250514">{t.configClaudeSonnet}</option>
-                                    <option value="claude-haiku-4-5-20251001">{t.configClaudeHaiku}</option>
-                                </select>
+                                <div className="afp-config-label-row">
+                                    {anthropicModels.length > 0 ? (
+                                        <select className="afp-config-input" value={local.model}
+                                            onChange={(e) => set('model', e.target.value)}>
+                                            <option value="">— {t.configAnthropicSelect || 'seleziona modello'} —</option>
+                                            {anthropicModels.map((m) => <option key={m} value={m}>{m}</option>)}
+                                        </select>
+                                    ) : (
+                                        <input type="text" className="afp-config-input" value={local.model}
+                                            placeholder={anthropicLoading ? '…' : 'claude-sonnet-4-20250514'}
+                                            onChange={(e) => set('model', e.target.value)} />
+                                    )}
+                                    <button className="afp-config-refresh"
+                                        onClick={handleLoadAnthropicModels} disabled={anthropicLoading || !local.apiKey}
+                                        title={t.configAnthropicLoadModels || 'Carica modelli disponibili'}>
+                                        {anthropicLoading ? '…' : '↻'}
+                                    </button>
+                                </div>
+                                {anthropicError && <div className="afp-config-error">⚠ {anthropicError}</div>}
                             </div>
                         </>)}
 

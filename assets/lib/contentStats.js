@@ -1390,7 +1390,7 @@ export function computeAlerts(cache) {
 
 // ── Formatting helpers ──────────────────────────────────────────────────────
 
-function friendlyMime(mime) {
+export function friendlyMime(mime) {
     if (!mime || mime === 'unknown') return 'Unknown';
     const map = {
         'application/pdf': 'PDF',

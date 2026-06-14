@@ -44,7 +44,5 @@ module.exports = {
         library: { type: 'module' },
         path: path.resolve('build', 'static'),
     },
-    plugins: [
-        new webpack.optimize.LimitChunkCountPlugin({ maxChunks: 1 }),
-    ],
+    plugins: [],
 };

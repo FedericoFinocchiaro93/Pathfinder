@@ -43,6 +43,7 @@ import DocumentPicker    from './ui/DocumentPicker.jsx';
 import CodePanelFP      from './ui/CodePanelFP.jsx';
 import { fetchOllamaModels } from '../lib/llm/ollama.js';
 import { fetchOpenAIModels } from '../lib/llm/openai.js';
+import { fetchAnthropicModels } from '../lib/llm/anthropic.js';
 import { resetSession as resetUsageSession } from '../lib/llmUsageTracker.js';
 import botIcon           from '../img/PathfinderLogo.png';
 
@@ -50,10 +51,7 @@ import botIcon           from '../img/PathfinderLogo.png';
 
 // ── Model lists per provider ───────────────────────────────────────────────────
 const PROVIDER_MODELS = {
-    anthropic: [
-        { id: 'claude-sonnet-4-20250514', label: 'Sonnet 4' },
-        { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' },
-    ],
+    anthropic: [], // Models loaded dynamically via /v1/models API
     gemini: [
         { id: 'gemini-2.5-flash', label: '2.5 Flash' },
         { id: 'gemini-2.5-pro', label: '2.5 Pro' },
@@ -174,11 +172,14 @@ export default function ChatbotFullpage() {
         return () => document.removeEventListener('mousedown', handler);
     }, [showModelMenu]);
 
-    // Fetch dynamic models for Ollama / OpenAI-compat when menu opens
+    // Fetch dynamic models when menu opens
     useEffect(() => {
         if (!showModelMenu) return;
         const provider = cfg.llmProvider;
-        if (provider === 'ollama') {
+        if (provider === 'anthropic') {
+            fetchAnthropicModels(cfg).then(models => setDynamicModels(models.map(m => ({ id: m, label: m }))))
+                .catch(() => setDynamicModels([]));
+        } else if (provider === 'ollama') {
             fetchOllamaModels(cfg).then(models => setDynamicModels(models.map(m => ({ id: m, label: m }))))
                 .catch(() => setDynamicModels([]));
         } else if (['openai', 'deepseek', 'mistral'].includes(provider)) {

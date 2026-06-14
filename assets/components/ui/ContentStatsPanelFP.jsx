@@ -323,16 +323,7 @@ function HealthGauge({ score, size = 140 }) {
     );
 }
 
-// ── Export to CSV ───────────────────────────────────────────────────────────
-function exportToCSV(rows, headers, filename) {
-    const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const csv = [headers.map(esc).join(','), ...rows.map(r => headers.map(h => esc(r[h])).join(','))].join('\n');
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filename; a.click();
-    URL.revokeObjectURL(url);
-}
+// ── Tab definitions ─────────────────────────────────────────────────────────
 
 // ── Tab definitions ─────────────────────────────────────────────────────────
 const TABS = ['contents', 'pages', 'vocabularies', 'documents'];
@@ -475,45 +466,7 @@ function ContentStatsPanelFP({ cfg, onBack, t }) {
         } catch { setDrillArticles([]); } finally { setDrillLoading(false); }
     }, [cfg, drillFilter]);
 
-    // ── Export CSV ──────────────────────────────────────────────────────
-    const handleExportCSV = useCallback(() => {
-        const isPage = tab === 'pages';
-        const rows = isPage ? (pageInsights?.byType || []) : drillArticles.length > 0 ? drillArticles : [];
-        let headers, filename;
-        if (drillFilter && drillArticles.length > 0) {
-            // Export current drill-down data
-            if (isPage) {
-                headers = [t.statsColTitle || 'Title', t.statsColAuthor || 'Author', t.statsColDate || 'Date', t.statsColType || 'Type'];
-                filename = `pages-${drillFilter.label}.csv`;
-            } else {
-                headers = [t.statsColTitle || 'Title', t.statsColAuthor || 'Author', t.statsColDate || 'Date'];
-                filename = `content-${drillFilter.label}.csv`;
-            }
-        } else {
-            // Export tab-level data
-            switch (tab) {
-                case 'contents':
-                    headers = [t.statsColTitle || 'Title', t.statsColAuthor || 'Author', t.statsColDate || 'Date'];
-                    filename = 'contents.csv';
-                    break;
-                case 'pages':
-                    headers = [t.statsColType || 'Type', 'Count'];
-                    filename = 'pages.csv';
-                    break;
-                case 'vocabularies':
-                    headers = [t.statsColCategory || 'Category', t.statsColUsage || 'Usage Count'];
-                    filename = 'vocabularies.csv';
-                    break;
-                case 'documents':
-                    headers = ['Type', 'Count', 'Size'];
-                    filename = 'documents.csv';
-                    break;
-                default:
-                    headers = ['Title']; filename = 'export.csv';
-            }
-        }
-        exportToCSV(rows, headers, filename);
-    }, [tab, drillFilter, drillArticles, pageInsights, t]);
+
 
     // ── Render tabs ─────────────────────────────────────────────────────
     const renderTabs = () => (
@@ -1313,8 +1266,6 @@ function ContentStatsPanelFP({ cfg, onBack, t }) {
                 <div style={{ flex: 1 }} />
                 <button className="afp-stats-refresh-btn" onClick={loadAll} disabled={loading}
                     title={t.statsRefresh || 'Refresh'}><Icon d={Icons.refresh} size={18} /></button>
-                <button className="afp-stats-export-btn" onClick={handleExportCSV}
-                    title={t.statsExportCSV || 'Export CSV'}><Icon d={Icons.download} size={18} /></button>
             </div>
             {renderTabs()}
             {/* Proactive Alert Banners */}

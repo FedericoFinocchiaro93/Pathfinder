@@ -6,7 +6,8 @@
 export const DEFAULT_CFG = {
     llmProvider:   'anthropic',
     apiKey:        '',
-    model:         'claude-sonnet-4-20250514',
+    anthropicProxyUrl: '',
+    model:         '',
     geminiApiKey:  '',
     geminiModel:   'gemini-2.5-flash',
     ollamaUrl:     'http://localhost:11434',
