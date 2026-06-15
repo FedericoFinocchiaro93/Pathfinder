@@ -766,7 +766,37 @@ FT3. QUANDO L'UTENTE CHIEDE UN TEMPLATE:
 - Se non specifica → usa il pattern FT1 di default
 - SEMPRE recupera prima i campi della struttura con get_content_structure_fields per sapere quali variabili sono disponibili
 - DOPO aver generato il codice FreeMarker, USA create_ddm_template per salvare il template programmaticamente — NON dire all'utente di crearlo manualmente nella UI
-- create_ddm_template({ name, script, structure_name }) crea il template automaticamente. structure_name risolve l'ID dinamicamente — NON usare MAI valori structure_id hardcoded`
+- create_ddm_template({ name, script, structure_name }) crea il template automaticamente. structure_name risolve l'ID dinamicamente — NON usare MAI valori structure_id hardcoded`,
+
+        rule12: `━━━ SXP BLUEPRINT — CONFIGURAZIONE RICERCA ━━━
+I SXP Blueprint permettono di personalizzare la ricerca in Liferay DXP. Quando l'utente chiede di creare o modificare un blueprint, segui queste regole:
+
+SB1. CREAZIONE BLUEPRINT: Usa create_sxp_blueprint con almeno il titolo. Il tool gestisce automaticamente la creazione in due passaggi (POST + PUT).
+
+SB2. COLLECTION PROVIDER: Se l'utente vuole usare il blueprint come fonte dati per Collection o Display Page Template, imposta collection_provider: true. Questo permette di usare il blueprint come Collection Provider nel portale.
+
+SB3. PARAMETRI PERSONALIZZATI: I parametri permettono di rendere dinamica la query del blueprint. Vengono referenziati nelle query con \${configuration.nome_parametro}.
+  Formato: { parameters: { "nome_parametro": { defaultValue: "valore", min: N, max: N } } }
+  Il campo "type" NON deve essere incluso — è generato automaticamente dal sistema.
+  Esempio: { parameters: { "keywords": { defaultValue: "" }, "limit": { defaultValue: 10, min: 1, max: 100 } } }
+
+SB4. ORDINAMENTO (sort_configuration): Permette di definire l'ordine dei risultati.
+  Formato: { sorts: [{ "nome_campo": { order: "asc"|"desc" } }] }
+  Esempio: { sorts: [{ "modified_date": { order: "desc" } }, { "title": { order: "asc" } }] }
+
+SB5. AGGREGAZIONI (aggregation_configuration): Permette di creare facet navigabili (categorie, tag, ecc.).
+  Formato: { aggs: { "nome_aggregazione": { tipo: { field: "campo", size: N } } } }
+  Tipi supportati: terms, max, min, avg, sum, cardinality, range, date_histogram, filter, nested.
+  Esempio: { aggs: { "categorie": { terms: { field: "assetCategoryNames", size: 10 } } } }
+
+SB6. EVIDENZIAZIONE (highlight_configuration): Permette di evidenziare i termini di ricerca nei risultati.
+  Formato: { fields: { "campo": { fragment_size: N, number_of_fragments: N } }, fragment_size: N, number_of_fragments: N, pre_tags: ["<em>"], post_tags: ["</em>"] }
+  IMPORTANTE: "fields" è una MAPPA (chiave=nome_campo), NON un array.
+  Esempio: { fields: { "title": { fragment_size: 100, number_of_fragments: 3 } }, fragment_size: 150, number_of_fragments: 3, pre_tags: ["<em>"], post_tags: ["</em>"] }
+
+SB7. FILTRI: Usa filter_ddm_structure_keys per filtrare per struttura DDM, filter_category_ids per filtrare per categoria, e custom_filter_clauses per query Elasticsearch personalizzate. I filtri sono combinati con AND.
+
+SB8. AGGIORNAMENTO: Usa update_sxp_blueprint per modificare un blueprint esistente. Fornisci almeno blueprint_id. I campi non forniti vengono preservati dallo stato attuale, TRANNE elementInstances che viene sostituito completamente se fornito.`
     },
 
     // ── ToolExecutor messages ──

@@ -475,7 +475,8 @@ export async function getSxpBlueprint({ baseUrl, blueprintId, user, pass }) {
  * Uses a 2-step process: POST to create without elementInstances, then PUT to add elementInstances.
  * This avoids a 500 error when creating with elementInstances directly.
  */
-export async function createSxpBlueprint({ baseUrl, title, description = '', filterDdmStructureKeys = [], filterCategoryIds = [], customFilterClauses = [], searchableAssetTypes = [], collectionProviderType = 'com.liferay.asset.kernel.model.AssetEntry', scopeGroupIds = [], user, pass }) {
+export async function createSxpBlueprint({ baseUrl, title, description = '', filterDdmStructureKeys = [], filterCategoryIds = [], customFilterClauses = [], searchableAssetTypes = [], collectionProvider = false, collectionProviderType = 'com.liferay.asset.kernel.model.AssetEntry', scopeGroupIds = [], sortConfiguration, aggregationConfiguration, highlightConfiguration, parameterConfiguration, user, pass }) {
+    dbg('createSxpBlueprint — title received:', JSON.stringify(title), 'type:', typeof title);
     // Step 1: Create blueprint WITHOUT elementInstances (causes 500 if included in POST)
     const createBody = {
         title,
@@ -487,17 +488,17 @@ export async function createSxpBlueprint({ baseUrl, title, description = '', fil
             generalConfiguration: {
                 clauseContributorsIncludes: ['*'],
                 clauseContributorsExcludes: [],
-                collectionProvider: false,
+                collectionProvider,
                 collectionProviderType,
                 scope: scopeGroupIds.map(id => ({ groupId: id })),
                 searchableAssetTypes,
             },
             queryConfiguration: { applyIndexerClauses: true },
-            aggregationConfiguration: {},
-            sortConfiguration: {},
-            highlightConfiguration: {},
+            aggregationConfiguration: aggregationConfiguration || {},
+            sortConfiguration: sortConfiguration || {},
+            highlightConfiguration: highlightConfiguration || {},
             advancedConfiguration: {},
-            parameterConfiguration: {},
+            parameterConfiguration: parameterConfiguration || {},
         },
     };
 
@@ -572,6 +573,8 @@ export async function createSxpBlueprint({ baseUrl, title, description = '', fil
 
         const updateBody = {
             ...created,
+            title,
+            title_i18n: { 'en-US': title, 'it-IT': title },
             elementInstances: [elementInstance],
         };
 
@@ -586,7 +589,7 @@ export async function createSxpBlueprint({ baseUrl, title, description = '', fil
  * Update an SXP Blueprint via Search Experiences REST API (PUT).
  * Replaces elementInstances completely — provide all desired elements.
  */
-export async function updateSxpBlueprint({ baseUrl, blueprintId, title, description, filterDdmStructureKeys, filterCategoryIds, customFilterClauses, searchableAssetTypes, collectionProviderType, scopeGroupIds, user, pass }) {
+export async function updateSxpBlueprint({ baseUrl, blueprintId, title, description, filterDdmStructureKeys, filterCategoryIds, customFilterClauses, searchableAssetTypes, collectionProvider, collectionProviderType, scopeGroupIds, sortConfiguration, aggregationConfiguration, highlightConfiguration, parameterConfiguration, user, pass }) {
     // First get current blueprint
     const current = await getSxpBlueprint({ baseUrl, blueprintId, user, pass });
 
@@ -617,6 +620,9 @@ export async function updateSxpBlueprint({ baseUrl, blueprintId, title, descript
         updateBody.configuration.generalConfiguration = {};
     }
 
+    if (collectionProvider !== undefined) {
+        updateBody.configuration.generalConfiguration.collectionProvider = collectionProvider;
+    }
     if (collectionProviderType !== undefined) {
         updateBody.configuration.generalConfiguration.collectionProviderType = collectionProviderType;
     }
@@ -625,6 +631,23 @@ export async function updateSxpBlueprint({ baseUrl, blueprintId, title, descript
     }
     if (scopeGroupIds !== undefined) {
         updateBody.configuration.generalConfiguration.scope = scopeGroupIds.map(id => ({ groupId: id }));
+    }
+
+    // Update sortConfiguration if provided
+    if (sortConfiguration !== undefined) {
+        updateBody.configuration.sortConfiguration = sortConfiguration;
+    }
+    // Update aggregationConfiguration if provided
+    if (aggregationConfiguration !== undefined) {
+        updateBody.configuration.aggregationConfiguration = aggregationConfiguration;
+    }
+    // Update highlightConfiguration if provided
+    if (highlightConfiguration !== undefined) {
+        updateBody.configuration.highlightConfiguration = highlightConfiguration;
+    }
+    // Update parameterConfiguration if provided
+    if (parameterConfiguration !== undefined) {
+        updateBody.configuration.parameterConfiguration = parameterConfiguration;
     }
 
     // Update elementInstances if filter criteria provided
@@ -731,9 +754,48 @@ export async function getSxpElement({ baseUrl, elementId, user, pass }) {
 
 /**
  * Create an SXP Element via Search Experiences REST API.
- * Supports simple filter creation (filter_field + filter_values) or custom Elasticsearch queries.
+ *
+ * Supports multiple creation modes:
+ * 1. Simple filter: filterField + filterValues (backward compatible)
+ * 2. Custom query: customQuery with optional occur, condition, boost
+ * 3. Full elementDefinition: elementDefinition object (full control)
+ *
+ * uiConfiguration field types:
+ *   - "text": free text input
+ *   - "number": numeric input (typeOptions: {min, max})
+ *   - "multiselect": multi-value selector
+ *   - "select": dropdown (typeOptions: {options: [{label, value}]})
+ *   - "json": JSON editor
+ *   - "fieldMapping": search field selector
+ *
+ * Condition types:
+ *   - { equals: { parameterName: "user.is_signed_in", value: false } }
+ *   - { contains: { parameterName: "keywords", value: "${configuration.keywords}" } }
+ *
+ * Category values: filter, boost, hide, conditional, sort, match, custom
+ * Icon values: filter, thumbs-up, hidden, sort, custom-field
+ *
+ * IMPORTANT: boost goes INSIDE the terms/term query object, not as a separate clause property.
+ * Example: { terms: { boost: "${configuration.boost}", field: "${configuration.values}" } }
  */
-export async function createSxpElement({ baseUrl, title, titleI18n, description, descriptionI18n, externalReferenceCode, type = 0, category = 'filter', icon = 'filter', filterField, filterValues, customQuery, user, pass }) {
+export async function createSxpElement({ baseUrl, title, titleI18n, description, descriptionI18n, externalReferenceCode, type = 0, category = 'filter', icon = 'filter', filterField, filterValues, customQuery, occur = 'filter', condition, uiConfiguration, boost, user, pass, elementDefinition }) {
+    // If a full elementDefinition is provided, use it directly
+    if (elementDefinition) {
+        const body = {
+            title,
+            title_i18n: titleI18n || { 'en-US': title },
+            description: description || '',
+            description_i18n: descriptionI18n || { 'en-US': description || '' },
+            externalReferenceCode,
+            schemaVersion: '1.0',
+            type,
+            version: '1,0',
+            readOnly: false,
+            elementDefinition,
+        };
+        return await liferayPost(baseUrl, '/o/search-experiences-rest/v1.0/sxp-elements', body, user, pass);
+    }
+
     // Build query from filter_field/filter_values or custom_query
     let queryConfig;
     if (customQuery) {
@@ -746,6 +808,21 @@ export async function createSxpElement({ baseUrl, title, titleI18n, description,
         queryConfig = { terms: { ddmStructureKey: [] } }; // empty default
     }
 
+    // Build the queryEntry with optional condition
+    const queryEntry = {
+        clauses: [{
+            occur,
+            query: queryConfig,
+            context: 'query',
+        }],
+    };
+    if (condition) {
+        queryEntry.condition = condition;
+    }
+
+    // Build uiConfiguration
+    const uiConfig = uiConfiguration || {};
+
     const body = {
         title,
         title_i18n: titleI18n || { 'en-US': title },
@@ -757,16 +834,10 @@ export async function createSxpElement({ baseUrl, title, titleI18n, description,
         version: '1,0',
         readOnly: false,
         elementDefinition: {
-            uiConfiguration: {},
+            uiConfiguration: uiConfig,
             configuration: {
                 queryConfiguration: {
-                    queryEntries: [{
-                        clauses: [{
-                            occur: 'filter',
-                            query: queryConfig,
-                            context: 'query',
-                        }],
-                    }],
+                    queryEntries: [queryEntry],
                 },
             },
             icon,
@@ -783,13 +854,31 @@ export async function createSxpElement({ baseUrl, title, titleI18n, description,
  * This function uses a delete+recreate approach as a workaround.
  * The externalReferenceCode is preserved from the original element.
  */
-export async function updateSxpElement({ baseUrl, elementId, title, description, filterField, filterValues, customQuery, user, pass }) {
+export async function updateSxpElement({ baseUrl, elementId, title, description, filterField, filterValues, customQuery, occur, condition, uiConfiguration, elementDefinition, user, pass }) {
     // Get current element to preserve its externalReferenceCode and other fields
     const current = await getSxpElement({ baseUrl, elementId, user, pass });
 
     const erc = current.externalReferenceCode;
     const newTitle = title !== undefined ? title : current.title;
     const newDescription = description !== undefined ? description : current.description;
+
+    // If full elementDefinition is provided, use it directly
+    if (elementDefinition) {
+        await deleteSxpElement({ baseUrl, elementId, user, pass });
+        const newElement = await createSxpElement({
+            baseUrl,
+            title: newTitle,
+            titleI18n: current.title_i18n,
+            description: newDescription,
+            descriptionI18n: current.description_i18n,
+            externalReferenceCode: erc,
+            type: current.type ?? 0,
+            elementDefinition,
+            user,
+            pass,
+        });
+        return newElement;
+    }
 
     // Build query config
     let queryConfig;
@@ -805,6 +894,25 @@ export async function updateSxpElement({ baseUrl, elementId, title, description,
             || { terms: { ddmStructureKey: [] } };
     }
 
+    // Build the queryEntry with optional condition
+    const currentOccur = occur || current.elementDefinition?.configuration?.queryConfiguration?.queryEntries?.[0]?.clauses?.[0]?.occur || 'filter';
+    const currentCondition = condition || current.elementDefinition?.configuration?.queryConfiguration?.queryEntries?.[0]?.condition;
+    const queryEntry = {
+        clauses: [{
+            occur: currentOccur,
+            query: queryConfig,
+            context: 'query',
+        }],
+    };
+    if (currentCondition) {
+        queryEntry.condition = currentCondition;
+    }
+
+    // Use provided uiConfiguration or preserve existing
+    const uiConfig = uiConfiguration || current.elementDefinition?.uiConfiguration || {};
+    const category = current.elementDefinition?.category || 'filter';
+    const icon = current.elementDefinition?.icon || 'filter';
+
     // Delete the old element
     await deleteSxpElement({ baseUrl, elementId, user, pass });
 
@@ -817,11 +925,14 @@ export async function updateSxpElement({ baseUrl, elementId, title, description,
         descriptionI18n: current.description_i18n,
         externalReferenceCode: erc,
         type: current.type ?? 0,
-        category: current.elementDefinition?.category || 'filter',
-        icon: current.elementDefinition?.icon || 'filter',
+        category,
+        icon,
         filterField,
         filterValues,
         customQuery: customQuery ? queryConfig : undefined,
+        occur: currentOccur,
+        condition: currentCondition,
+        uiConfiguration: uiConfig,
         user,
         pass,
     });

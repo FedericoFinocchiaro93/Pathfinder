@@ -519,19 +519,25 @@ export async function executeTool(name, input, cfg) {
 
         // Create a new SXP Blueprint
         if (name === 'create_sxp_blueprint') {
+            console.log('[DEBUG create_sxp_blueprint] input:', JSON.stringify(input, null, 2));
             const title = input?.title;
-            if (!title) return { error: 'title obbligatorio.' };
+            if (!title || (typeof title === 'string' && !title.trim())) return { error: 'title è obbligatorio e non può essere vuoto. Fornisci un titolo valido per il blueprint, ad esempio il nome che l\'utente ha richiesto.' };
             try {
                 const result = await createSxpBlueprint({
                     baseUrl: base,
-                    title,
+                    title: typeof title === 'string' ? title.trim() : String(title),
                     description: input?.description || '',
                     filterDdmStructureKeys: input?.filter_ddm_structure_keys || [],
                     filterCategoryIds: input?.filter_category_ids || [],
                     customFilterClauses: input?.custom_filter_clauses || [],
                     searchableAssetTypes: input?.searchable_asset_types || [],
+                    collectionProvider: input?.collection_provider || false,
                     collectionProviderType: input?.collection_provider_type || 'com.liferay.asset.kernel.model.AssetEntry',
                     scopeGroupIds: input?.scope_group_ids || [],
+                    sortConfiguration: input?.sort_configuration,
+                    aggregationConfiguration: input?.aggregation_configuration,
+                    highlightConfiguration: input?.highlight_configuration,
+                    parameterConfiguration: input?.parameter_configuration,
                     user, pass,
                 });
                 return { success: true, blueprint: result };
@@ -554,8 +560,13 @@ export async function executeTool(name, input, cfg) {
                     filterCategoryIds: input?.filter_category_ids,
                     customFilterClauses: input?.custom_filter_clauses,
                     searchableAssetTypes: input?.searchable_asset_types,
+                    collectionProvider: input?.collection_provider,
                     collectionProviderType: input?.collection_provider_type,
                     scopeGroupIds: input?.scope_group_ids,
+                    sortConfiguration: input?.sort_configuration,
+                    aggregationConfiguration: input?.aggregation_configuration,
+                    highlightConfiguration: input?.highlight_configuration,
+                    parameterConfiguration: input?.parameter_configuration,
                     user, pass,
                 });
                 return { success: true, blueprint: result };
@@ -616,10 +627,14 @@ export async function executeTool(name, input, cfg) {
                     externalReferenceCode: erc,
                     type: input?.type ?? 0,
                     category: input?.category || 'filter',
-                    icon: input?.icon || 'filter',
+                    icon: input?.icon || (input?.category === 'boost' ? 'thumbs-up' : input?.category === 'hide' ? 'hidden' : 'filter'),
+                    occur: input?.occur || (input?.category === 'boost' ? 'should' : 'filter'),
+                    condition: input?.condition,
+                    uiConfiguration: input?.ui_configuration,
                     filterField: input?.filter_field,
                     filterValues: input?.filter_values,
                     customQuery: input?.custom_query,
+                    elementDefinition: input?.element_definition,
                     user, pass,
                 });
                 return { success: true, element: result };
@@ -641,6 +656,10 @@ export async function executeTool(name, input, cfg) {
                     filterField: input?.filter_field,
                     filterValues: input?.filter_values,
                     customQuery: input?.custom_query,
+                    occur: input?.occur,
+                    condition: input?.condition,
+                    uiConfiguration: input?.ui_configuration,
+                    elementDefinition: input?.element_definition,
                     user, pass,
                 });
                 return { success: true, element: result };
