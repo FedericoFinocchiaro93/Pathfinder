@@ -66,6 +66,12 @@ This is where Pathfinder AI truly shines. Every CRUD operation across your Lifer
 - **Manage Object entries** — full CRUD on all Object instances, regardless of scope
 - Pathfinder uses a dedicated `objectFieldBuilder` to handle complex field type combinations automatically
 
+#### 🔎 SXP Blueprints & Elements (Search Experiences)
+- **Full CRUD** on SXP Blueprints and Elements — create blueprints from scratch, update existing ones, delete, list, and inspect their full configuration
+- **Advanced filtering** — combine DDM structure keys, asset category IDs, and custom Elasticsearch clauses (terms, range, match, exists, bool, nested) in a single blueprint to precisely target search results
+- **Flexible boolean logic** — `filter` (AND, no scoring), `should` (OR, boosts relevance), `must` (AND + scoring), `must_not` (exclude) — compose complex queries that match real-world search requirements
+- **Aggregations & highlighting** — configure facets (terms, range, date_histogram), field highlighting, and sort rules to build rich search experiences
+
 #### 📊 Batch Creation from Excel
 - **Drag & drop Excel files** (.xlsx, .xls, .csv) directly into the chat — data is automatically parsed and presented in tabular format
 - **Generate Excel templates** — ask Pathfinder to create a blank template for structures, objects, vocabularies, pages, roles, or users, then fill it and upload
@@ -119,13 +125,6 @@ This is where Pathfinder AI truly shines. Every CRUD operation across your Lifer
 - **Site hierarchy** — browse pages by depth level with drill-down navigation and parent page info
 - **Compact bar charts** — automatic compact mode when displaying few data points
 - **i18n** — full Italian and English support for all analytics labels
-
----
-
-### 🔎 SXP Blueprints & Elements (Search Experiences)
-- **Full CRUD** on SXP Blueprints and Elements — create, update, delete, list, inspect
-- **Advanced filtering** — combine DDM structure keys, asset category IDs, and custom Elasticsearch clauses (terms, range, match, exists, bool) in a single blueprint
-- **Flexible boolean logic** — `filter` (AND), `should` (OR), `must` (AND + scoring), `must_not` (exclude)
 
 ---
 
