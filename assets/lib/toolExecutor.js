@@ -13,6 +13,7 @@ import {
     getStructureKeyViaJsonWS,
     listSxpBlueprints, getSxpBlueprint, createSxpBlueprint, updateSxpBlueprint, deleteSxpBlueprint,
     listSxpElements, getSxpElement, createSxpElement, updateSxpElement, deleteSxpElement,
+    listFragmentCollections, listFragments, createFragmentCollection, createFragment, deleteFragmentCollection, deleteFragment, getFragment, updateFragment,
     ENRICH_FRIENDLY_LIMIT,
     getCachedResponse, setCachedResponse,
 } from './liferay.js';
@@ -124,6 +125,7 @@ const NO_SITE_TOOLS = new Set([
     'generate_excel_template',
     'get_content_structure_fields',
     'create_ddm_template', 'delete_ddm_template',
+    'list_fragment_collections', 'list_fragments', 'create_fragment_collection', 'create_fragment', 'delete_fragment_collection', 'delete_fragment', 'get_fragment', 'update_fragment',
     'get_structure_key',
     'list_sxp_blueprints', 'get_sxp_blueprint', 'create_sxp_blueprint', 'update_sxp_blueprint', 'delete_sxp_blueprint',
     'list_sxp_elements', 'get_sxp_element', 'create_sxp_element', 'update_sxp_element', 'delete_sxp_element',
@@ -464,6 +466,159 @@ export async function executeTool(name, input, cfg) {
             try {
                 const result = await deleteDDMTemplateViaJsonWS({ baseUrl: base, templateId, user, pass });
                 return { success: true, deleted: true, templateId: result.templateId };
+            } catch (e) {
+                return { error: e.message || String(e) };
+            }
+        }
+
+        // ── FRAGMENT COLLECTION & FRAGMENT ENTRY TOOLS ──────────────────────────
+
+        // List Fragment Collections
+        if (name === 'list_fragment_collections') {
+            const groupId = input?.group_id || siteId;
+            try {
+                const collections = await listFragmentCollections({ baseUrl: base, groupId, name: input?.name, user, pass });
+                return { collections };
+            } catch (e) {
+                return { error: e.message || String(e) };
+            }
+        }
+
+        // List Fragment Entries in a collection
+        if (name === 'list_fragments') {
+            const groupId = input?.group_id || siteId;
+            const fragmentCollectionId = input?.fragment_collection_id;
+            if (!fragmentCollectionId) {
+                return { error: 'Missing required field: fragment_collection_id. Use list_fragment_collections to find it.' };
+            }
+            try {
+                const fragments = await listFragments({ baseUrl: base, groupId, fragmentCollectionId, user, pass });
+                return { fragments };
+            } catch (e) {
+                return { error: e.message || String(e) };
+            }
+        }
+
+        // Create a Fragment Collection
+        if (name === 'create_fragment_collection') {
+            const collName = input?.name;
+            if (!collName || (typeof collName === 'string' && !collName.trim())) {
+                return { error: 'name è obbligatorio e non può essere vuoto per creare una Fragment Collection.' };
+            }
+            const groupId = input?.group_id || siteId;
+            try {
+                const result = await createFragmentCollection({
+                    baseUrl: base, groupId,
+                    name: typeof collName === 'string' ? collName.trim() : String(collName),
+                    description: input?.description || '',
+                    fragmentCollectionKey: input?.fragment_collection_key || '',
+                    user, pass
+                });
+                return { success: true, collection: result };
+            } catch (e) {
+                return { error: e.message || String(e) };
+            }
+        }
+
+        // Create a Fragment Entry
+        if (name === 'create_fragment') {
+            const fragmentName = input?.name;
+            const html = input?.html;
+            const fragmentCollectionId = input?.fragment_collection_id;
+            if (!fragmentName || (typeof fragmentName === 'string' && !fragmentName.trim())) {
+                return { error: 'name è obbligatorio e non può essere vuoto per creare un Fragment.' };
+            }
+            if (!html) {
+                return { error: 'html è obbligatorio per creare un Fragment. Fornisci il codice HTML del Fragment.' };
+            }
+            if (!fragmentCollectionId) {
+                return { error: 'fragment_collection_id è obbligatorio. Usa list_fragment_collections per trovare l\'ID della collection.' };
+            }
+            const groupId = input?.group_id || siteId;
+            try {
+                const result = await createFragment({
+                    baseUrl: base, groupId, fragmentCollectionId,
+                    name: typeof fragmentName === 'string' ? fragmentName.trim() : String(fragmentName),
+                    html,
+                    css: input?.css || '',
+                    js: input?.js || '',
+                    cacheable: input?.cacheable || false,
+                    type: input?.type ?? 0,
+                    configuration: input?.configuration || '',
+                    fragmentEntryKey: input?.fragment_entry_key || '',
+                    user, pass
+                });
+                return { success: true, fragment: result };
+            } catch (e) {
+                return { error: e.message || String(e) };
+            }
+        }
+
+        // Delete a Fragment Collection
+        if (name === 'delete_fragment_collection') {
+            const fragmentCollectionId = input?.fragment_collection_id;
+            if (!fragmentCollectionId) {
+                return { error: 'Missing required field: fragment_collection_id. Use list_fragment_collections to find it.' };
+            }
+            try {
+                const result = await deleteFragmentCollection({ baseUrl: base, fragmentCollectionId, user, pass });
+                return { success: true, deleted: true, fragmentCollectionId: result.fragmentCollectionId };
+            } catch (e) {
+                return { error: e.message || String(e) };
+            }
+        }
+
+        // Delete a Fragment Entry
+        if (name === 'delete_fragment') {
+            const fragmentEntryId = input?.fragment_entry_id;
+            if (!fragmentEntryId) {
+                return { error: 'Missing required field: fragment_entry_id. Use list_fragments to find it.' };
+            }
+            try {
+                const result = await deleteFragment({ baseUrl: base, fragmentEntryId, user, pass });
+                return { success: true, deleted: true, fragmentEntryId: result.fragmentEntryId };
+            } catch (e) {
+                return { error: e.message || String(e) };
+            }
+        }
+
+        // Get a single Fragment Entry by ID
+        if (name === 'get_fragment') {
+            const fragmentEntryId = input?.fragment_entry_id;
+            if (!fragmentEntryId) {
+                return { error: 'Missing required field: fragment_entry_id. Use list_fragments to find it.' };
+            }
+            try {
+                const fragment = await getFragment({ baseUrl: base, fragmentEntryId, user, pass });
+                return { fragment };
+            } catch (e) {
+                return { error: e.message || String(e) };
+            }
+        }
+
+        // Update a Fragment Entry
+        if (name === 'update_fragment') {
+            const fragmentEntryId = input?.fragment_entry_id;
+            const fragmentCollectionId = input?.fragment_collection_id;
+            if (!fragmentEntryId) {
+                return { error: 'Missing required field: fragment_entry_id. Use list_fragments or get_fragment to find it.' };
+            }
+            if (!fragmentCollectionId) {
+                return { error: 'Missing required field: fragment_collection_id. Use list_fragments to find the collection ID for this fragment.' };
+            }
+            try {
+                const result = await updateFragment({
+                    baseUrl: base, fragmentEntryId, fragmentCollectionId,
+                    name: input?.name,
+                    html: input?.html,
+                    css: input?.css,
+                    js: input?.js,
+                    cacheable: input?.cacheable,
+                    configuration: input?.configuration,
+                    status: input?.status,
+                    user, pass
+                });
+                return { success: true, fragment: result };
             } catch (e) {
                 return { error: e.message || String(e) };
             }

@@ -796,7 +796,30 @@ SB6. HIGHLIGHTING (highlight_configuration): Highlights search terms in results.
 
 SB7. FILTERS: Use filter_ddm_structure_keys to filter by DDM structure, filter_category_ids to filter by category, and custom_filter_clauses for custom Elasticsearch queries. Filters are combined with AND logic.
 
-SB8. UPDATE: Use update_sxp_blueprint to modify an existing blueprint. Provide at least blueprint_id. Fields not provided are preserved from current state, EXCEPT elementInstances which is fully replaced if provided.`
+SB8. UPDATE: Use update_sxp_blueprint to modify an existing blueprint. Provide at least blueprint_id. Fields not provided are preserved from current state, EXCEPT elementInstances which is fully replaced if provided.
+
+SB9. SXP ELEMENT — PREDEFINED VARIABLES: In elements you can use predefined variables: \${context.company_id}, \${context.language_id}, \${context.scope_group_id}, \${context.is_staging_group}, \${time.current_date}, \${time.current_year}, \${user.is_signed_in}, \${user.id}, \${user.group_ids}, \${user.first_name}, \${user.last_name}, \${user.email_domain}, \${user.job_title}, \${user.is_omniadmin}, \${user.asset_category_ids}, \${user.asset_tag_names}, \${configuration.parameter_name} (blueprint parameters).
+
+SB10. SXP ELEMENT — ADVANCED QUERIES: Element queries support: nested (for Object fields with path "nestedFieldArray" and DDM fields with path "ddmFieldArray"), bool with should/must/must_not/filter, range, match, exists. For DDM fields: { nested: { path: "ddmFieldArray", query: { bool: { filter: { match: { "ddmFieldArray.ddmFieldName": "field_name" } }, must: { term: { "ddmFieldArray.ddmFieldValueKeyword_en_US": "value" } } } } } }. queryEntries also support postFilterClauses (array of clauses for post-filtering) and rescores (array with query, queryWeight, rescoreQueryWeight, scoreMode, windowSize for relevance recalculation).
+
+SB11. SXP ELEMENT — CONDITIONS: Conditions activate the element only when true. Types: { equals: { parameterName: "name", value: "value" } } or { contains: { parameterName: "name", value: "value" } }. Example: { contains: { parameterName: "exclude.journal_articles", value: "true" } }.
+
+SB12. SXP ELEMENT — UI CONFIGURATION: UI fields support: text, number, select (with typeOptions.options), multiselect, slider, date (with typeOptions.format), fieldMapping, fieldMappingList (field list with locale and boost), itemSelector, keywords, json. TypeOptions: boost, format, nullable, options, required, step, unit, unitSuffix. Values are referenced with \${configuration.field_name}.`,
+
+        rule13: `━━━ PAGE FRAGMENT — UI COMPONENTS FOR PAGE LAYOUT ━━━
+FR1. FRAGMENT COLLECTION: Use list_fragment_collections to list existing collections. Use create_fragment_collection to create a new one (name required). Each collection organizes a group of Fragments.
+FR2. FRAGMENT ENTRY: Use list_fragments to list Fragments in a collection (fragment_collection_id required). Use create_fragment to create a new Fragment (fragment_collection_id, name and html required).
+FR3. GET FRAGMENT: Use get_fragment to read full details of a Fragment by ID (html, css, js, configuration). Useful before modifying it.
+FR4. UPDATE FRAGMENT: Use update_fragment to modify an existing Fragment. Requires fragment_entry_id and fragment_collection_id (mandatory). Use get_fragment first to see current values, then pass only the fields to change.
+FR5. LIFERAY SPECIAL HTML: Fragments support special tags:
+  - <lfr-drop-zone></lfr-drop-zone> — editable area where other Fragments can be inserted (only type=0/Section)
+  - data-lfr-editable-id="name" — user-editable field
+  - data-lfr-editable-type="rich-text" — editable field type (rich-text, text, image, link)
+  Example: <div class="my-fragment"><h1 data-lfr-editable-id="title" data-lfr-editable-type="rich-text">Title</h1><lfr-drop-zone></lfr-drop-zone></div>
+FR6. FRAGMENT TYPES: type=0 Section (can contain <lfr-drop-zone>), type=1 Component (no drop zone), type=2 Input (form fields). Default: 0.
+FR7. CONFIGURATION: The configuration parameter is a JSON defining configurable fields. Format: {"fieldSets":[{"fields":[{"name":"bgColor","label":"Background Color","type":"color","defaultValue":"#FFFFFF"}]}]}
+FR8. CACHEABLE: If true, the Fragment is cached for performance, but updates to mapped content are only visible after republishing or clearing the cache.
+FR9. DELETION: Use delete_fragment_collection to delete a collection and delete_fragment to delete a single Fragment. Warning: irreversible action.`
     },
 
     // ── ToolExecutor messages ──

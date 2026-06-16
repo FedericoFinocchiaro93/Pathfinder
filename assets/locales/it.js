@@ -796,7 +796,30 @@ SB6. EVIDENZIAZIONE (highlight_configuration): Permette di evidenziare i termini
 
 SB7. FILTRI: Usa filter_ddm_structure_keys per filtrare per struttura DDM, filter_category_ids per filtrare per categoria, e custom_filter_clauses per query Elasticsearch personalizzate. I filtri sono combinati con AND.
 
-SB8. AGGIORNAMENTO: Usa update_sxp_blueprint per modificare un blueprint esistente. Fornisci almeno blueprint_id. I campi non forniti vengono preservati dallo stato attuale, TRANNE elementInstances che viene sostituito completamente se fornito.`
+SB8. AGGIORNAMENTO: Usa update_sxp_blueprint per modificare un blueprint esistente. Fornisci almeno blueprint_id. I campi non forniti vengono preservati dallo stato attuale, TRANNE elementInstances che viene sostituito completamente se fornito.
+
+SB9. SXP ELEMENT — VARIABILI PREDEFINITE: Negli elementi puoi usare variabili predefinite: \${context.company_id}, \${context.language_id}, \${context.scope_group_id}, \${context.is_staging_group}, \${time.current_date}, \${time.current_year}, \${user.is_signed_in}, \${user.id}, \${user.group_ids}, \${user.first_name}, \${user.last_name}, \${user.email_domain}, \${user.job_title}, \${user.is_omniadmin}, \${user.asset_category_ids}, \${user.asset_tag_names}, \${configuration.nome_parametro} (parametri del blueprint).
+
+SB10. SXP ELEMENT — QUERY AVANZATE: Le query degli elementi supportano: nested (per Object fields con path "nestedFieldArray" e DDM fields con path "ddmFieldArray"), bool con should/must/must_not/filter, range, match, exists. Per DDM fields: { nested: { path: "ddmFieldArray", query: { bool: { filter: { match: { "ddmFieldArray.ddmFieldName": "nome_campo" } }, must: { term: { "ddmFieldArray.ddmFieldValueKeyword_en_US": "valore" } } } } } }. Le queryEntries supportano anche postFilterClauses (array di clause per post-filtraggio) e rescores (array con query, queryWeight, rescoreQueryWeight, scoreMode, windowSize per ricalcolare la rilevanza).
+
+SB11. SXP ELEMENT — CONDITION: Le condizioni attivano l'elemento solo se vere. Tipi: { equals: { parameterName: "nome", value: "valore" } } o { contains: { parameterName: "nome", value: "valore" } }. Esempio: { contains: { parameterName: "exclude.journal_articles", value: "true" } }.
+
+SB12. SXP ELEMENT — UI CONFIGURATION: I campi UI supportano: text, number, select (con typeOptions.options), multiselect, slider, date (con typeOptions.format), fieldMapping, fieldMappingList (lista campi con locale e boost), itemSelector, keywords, json. TypeOptions: boost, format, nullable, options, required, step, unit, unitSuffix. I valori sono referenziabili con \${configuration.nome_campo}.`,
+
+        rule13: `━━━ PAGE FRAGMENT — COMPONENTI UI PER IMPAGINAZIONE ━━━
+FR1. FRAGMENT COLLECTION: Usa list_fragment_collections per elencare le collection esistenti. Usa create_fragment_collection per crearne una nuova (name obbligatorio). Ogni collection organizza un gruppo di Fragment.
+FR2. FRAGMENT ENTRY: Usa list_fragments per elencare i Fragment in una collection (fragment_collection_id obbligatorio). Usa create_fragment per creare un nuovo Fragment (fragment_collection_id, name e html obbligatori).
+FR3. GET FRAGMENT: Usa get_fragment per leggere i dettagli completi di un Fragment per ID (html, css, js, configurazione). Utile prima di modificarlo.
+FR4. UPDATE FRAGMENT: Usa update_fragment per modificare un Fragment esistente. Richiede fragment_entry_id e fragment_collection_id (obbligatori). Usa prima get_fragment per vedere i valori attuali, poi passa solo i campi da cambiare.
+FR5. HTML SPECIALE LIFERAY: I Fragment supportano tag speciali:
+  - <lfr-drop-zone></lfr-drop-zone> — area editabile dove altri Fragment possono essere inseriti (solo type=0/Section)
+  - data-lfr-editable-id="nome" — campo editabile dall'utente
+  - data-lfr-editable-type="rich-text" — tipo di campo editabile (rich-text, text, image, link)
+  Esempio: <div class="mio-fragment"><h1 data-lfr-editable-id="titolo" data-lfr-editable-type="rich-text">Titolo</h1><lfr-drop-zone></lfr-drop-zone></div>
+FR6. TIPI FRAGMENT: type=0 Section (può contenere <lfr-drop-zone>), type=1 Component (no drop zone), type=2 Input (campi form). Default: 0.
+FR7. CONFIGURATION: Il parametro configuration è un JSON che definisce campi configurabili. Formato: {"fieldSets":[{"fields":[{"name":"bgColor","label":"Background Color","type":"color","defaultValue":"#FFFFFF"}]}]}
+FR8. CACHEABLE: Se true, il Fragment viene cachato per performance, ma gli aggiornamenti ai contenuti mappati saranno visibili solo dopo ripubblicazione o pulizia cache.
+FR9. ELIMINAZIONE: Usa delete_fragment_collection per eliminare una collection e delete_fragment per eliminare un singolo Fragment. Attenzione: azione irreversibile.`
     },
 
     // ── ToolExecutor messages ──

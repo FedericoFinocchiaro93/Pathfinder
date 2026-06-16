@@ -32,6 +32,15 @@ This is where Pathfinder AI truly shines. Every CRUD operation across your Lifer
 > feature.flag.LPS-178052=true
 > ```
 
+#### 🧩 Page Fragments
+- **Create Fragment Collections** — organize your Page Fragments into logical groups (e.g. "Ricerca", "Layout", "Components")
+- **Create Page Fragments** — build reusable UI components with HTML, CSS, and JS directly from chat
+- **Liferay-specific HTML** — use `<lfr-drop-zone>` for editable drop areas, `data-lfr-editable-id` and `data-lfr-editable-type` for inline-editable fields (rich-text, text, image, link)
+- **Fragment types** — Section (type 0, with drop zones), Component (type 1, no drop zones), Input (type 2, form fields)
+- **Configurable Fragments** — define custom configuration fields (colors, text, images) via JSON configuration
+- **Read & Update** — inspect any Fragment's full HTML/CSS/JS source, then modify it in place
+- **Delete** — remove individual Fragments or entire Collections (with confirmation)
+
 #### 👥 Users, Organizations & Groups
 - **Full user management** — create, update, deactivate, and delete users
 - **Manage organizations** — create, update, and delete organizational structures
@@ -88,7 +97,7 @@ This is where Pathfinder AI truly shines. Every CRUD operation across your Lifer
 - **Mandatory privacy consent screen** on first access — no chat until the user accepts
 - **Full EULA** always accessible from the settings panel
 - **Liferay credentials stay in the browser** — never transmitted to third parties
-- **11 behavioral rule blocks** injected at runtime into the system prompt — covering communication, data integrity, multi-step flows, entity handling, Excel file handling, and known API limitations
+- **14 behavioral rule blocks** injected at runtime into the system prompt — covering communication, data integrity, multi-step flows, entity handling, Excel file handling, Page Fragment management, and known API limitations
 - **No telemetry** — zero data sent to external servers
 
 ---
@@ -156,11 +165,11 @@ Switch providers at any time from the settings ⚙ — the conversation continue
 │         (dispatch, retry, fallback)              │
 ├──────────────────────────────────────────────────┤
 │               Tool Executor                       │
-│         40+ Liferay Headless tools               │
+│         50+ Liferay Headless & JSON-WS tools      │
 ├──────────────────────────────────────────────────┤
-│            Liferay DXP Headless APIs              │
+│            Liferay DXP APIs                        │
 │   Delivery · Admin User · Taxonomy · Search      │
-│   Search Experiences (SXP) · JSON-WS             │
+│   Search Experiences (SXP) · Fragments · JSON-WS │
 └──────────────────────────────────────────────────┘
 ```
 
@@ -195,7 +204,7 @@ Switch providers at any time from the settings ⚙ — the conversation continue
 
 ## 🛠️ Liferay Tools
 
-Pathfinder AI can execute **40+ operations** on your Liferay portal through Headless APIs:
+Pathfinder AI can execute **50+ operations** on your Liferay portal through Headless APIs and JSON-WS:
 
 | Category | CRUD Operations | Search / Read |
 |----------|----------------|---------------|
@@ -210,6 +219,7 @@ Pathfinder AI can execute **40+ operations** on your Liferay portal through Head
 | **User Groups** | Create, update, delete user groups | — |
 | **Objects** | Create Object Definitions with typed fields; full CRUD on entries (company, site, Space-scoped) | — |
 | **Spaces (CMS)** | Create, update, delete Spaces; connect/disconnect to sites; assign/remove users | List all Spaces |
+| **Page Fragments** | Create/update/delete Fragment Collections and Fragment Entries; full HTML/CSS/JS editing with Liferay tags (`<lfr-drop-zone>`, `data-lfr-editable-*`) | List collections and fragments; get fragment details by ID |
 | **SXP Blueprints** | Create, update, delete Search Experience blueprints with filters (structure, categories, custom ES clauses) | List, get blueprints; get structure keys |
 | **SXP Elements** | Create, update, delete Search Experience filter elements | List, get elements |
 
@@ -290,7 +300,7 @@ Updated pricing for all providers: Anthropic, Gemini, OpenAI, DeepSeek, Mistral.
 - **Local credentials** — Liferay email and password stay in the browser, transmitted only to the portal
 - **Local API keys** — LLM provider keys are stored in localStorage
 - **No telemetry** — zero data sent to third-party servers
-- **LLM rules** — 22 behavioral rule blocks injected at runtime, preventing the AI from exposing technical details, inventing data, or bypassing operational constraints
+- **LLM rules** — 14 behavioral rule blocks injected at runtime, preventing the AI from exposing technical details, inventing data, or bypassing operational constraints
 - **Feedback RAG** — positively rated Q&A pairs are injected into the system prompt so the LLM learns from approved answers
 
 ---

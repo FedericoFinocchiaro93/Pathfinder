@@ -457,6 +457,275 @@ export async function getStructureKeyViaJsonWS({ baseUrl, structureId, user, pas
 }
 
 /**
+ * List Fragment Collections via JSON-WS (GET /api/jsonws/fragment.fragmentcollection/get-fragment-collections)
+ * Returns an array of fragment collection objects.
+ */
+export async function listFragmentCollections({ baseUrl, groupId, name, user, pass }) {
+    const token = getLiferayToken();
+    const params = new URLSearchParams();
+    if (token) params.append('p_auth', token);
+    params.append('groupId', String(groupId));
+    if (name) params.append('name', name);
+    params.append('start', '-1');
+    params.append('end', '-1');
+
+    const url = baseUrl.replace(/\/$/, '') + '/api/jsonws/fragment.fragmentcollection/get-fragment-collections?' + params.toString();
+    const headers = {};
+    if (user && pass) {
+        headers['Authorization'] = 'Basic ' + btoa(user + ':' + pass);
+    } else if (token) {
+        headers['x-csrf-token'] = token;
+    }
+
+    dbg('JSONWS get-fragment-collections', url, { groupId, name });
+    const res = await fetch(url, { method: 'GET', credentials: 'same-origin', headers });
+    if (!res.ok) {
+        const bodyText = await res.text().catch(() => '');
+        throw new Error(`JSONWS get-fragment-collections failed: HTTP ${res.status} ${res.statusText} — ${bodyText.substring(0, 2000)}`);
+    }
+    return res.json();
+}
+
+/**
+ * List Fragment Entries in a collection via JSON-WS (GET /api/jsonws/fragment.fragmententry/get-fragment-entries)
+ * Returns an array of fragment entry objects.
+ */
+export async function listFragments({ baseUrl, groupId, fragmentCollectionId, user, pass }) {
+    const token = getLiferayToken();
+    const params = new URLSearchParams();
+    if (token) params.append('p_auth', token);
+    params.append('groupId', String(groupId));
+    params.append('fragmentCollectionId', String(fragmentCollectionId));
+    params.append('start', '-1');
+    params.append('end', '-1');
+
+    const url = baseUrl.replace(/\/$/, '') + '/api/jsonws/fragment.fragmententry/get-fragment-entries?' + params.toString();
+    const headers = {};
+    if (user && pass) {
+        headers['Authorization'] = 'Basic ' + btoa(user + ':' + pass);
+    } else if (token) {
+        headers['x-csrf-token'] = token;
+    }
+
+    dbg('JSONWS get-fragment-entries', url, { groupId, fragmentCollectionId });
+    const res = await fetch(url, { method: 'GET', credentials: 'same-origin', headers });
+    if (!res.ok) {
+        const bodyText = await res.text().catch(() => '');
+        throw new Error(`JSONWS get-fragment-entries failed: HTTP ${res.status} ${res.statusText} — ${bodyText.substring(0, 2000)}`);
+    }
+    return res.json();
+}
+
+/**
+ * Create a Fragment Collection via JSON-WS (POST /api/jsonws/fragment.fragmentcollection/add-fragment-collection)
+ * Returns the created fragment collection object.
+ */
+export async function createFragmentCollection({ baseUrl, groupId, name, description = '', fragmentCollectionKey = '', user, pass }) {
+    const token = getLiferayToken();
+    const params = new URLSearchParams();
+    if (token) params.append('p_auth', token);
+    params.append('groupId', String(groupId));
+    params.append('name', name);
+    params.append('description', description);
+    if (fragmentCollectionKey) params.append('fragmentCollectionKey', fragmentCollectionKey);
+    else params.append('fragmentCollectionKey', '');
+    params.append('externalReferenceCode', '');
+    params.append('marketplace', 'false');
+    params.append('serviceContext', JSON.stringify({ scopeGroupId: String(groupId) }));
+
+    const url = baseUrl.replace(/\/$/, '') + '/api/jsonws/fragment.fragmentcollection/add-fragment-collection';
+    const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+    if (user && pass) {
+        headers['Authorization'] = 'Basic ' + btoa(user + ':' + pass);
+    } else if (token) {
+        headers['x-csrf-token'] = token;
+    }
+
+    dbg('JSONWS add-fragment-collection', url, { groupId, name });
+
+    const res = await fetch(url, { method: 'POST', credentials: 'same-origin', headers, body: params.toString() });
+    if (!res.ok) {
+        const bodyText = await res.text().catch(() => '');
+        throw new Error(`JSONWS add-fragment-collection failed: HTTP ${res.status} ${res.statusText} — ${bodyText.substring(0, 2000)}`);
+    }
+    return res.json();
+}
+
+/**
+ * Create a Fragment Entry via JSON-WS (POST /api/jsonws/fragment.fragmententry/add-fragment-entry)
+ * Uses the 18-parameter signature: externalReferenceCode, groupId, fragmentCollectionId,
+ * fragmentEntryKey, name, css, html, js, cacheable, configuration, icon,
+ * previewFileEntryId, readOnly, marketplace, type, typeOptions, status, serviceContext
+ * Returns the created fragment entry object.
+ */
+export async function createFragment({ baseUrl, groupId, fragmentCollectionId, name, html, css = '', js = '', cacheable = false, type = 0, configuration = '', fragmentEntryKey = '', user, pass }) {
+    const token = getLiferayToken();
+    const params = new URLSearchParams();
+    if (token) params.append('p_auth', token);
+    // 18-parameter signature — order matters for JSONWS matching
+    params.append('externalReferenceCode', '');
+    params.append('groupId', String(groupId));
+    params.append('fragmentCollectionId', String(fragmentCollectionId));
+    params.append('fragmentEntryKey', fragmentEntryKey || '');
+    params.append('name', name);
+    params.append('css', css);
+    params.append('html', html);
+    params.append('js', js);
+    params.append('cacheable', String(cacheable));
+    params.append('configuration', configuration || '');
+    params.append('icon', '');
+    params.append('previewFileEntryId', '0');
+    params.append('readOnly', 'false');
+    params.append('marketplace', 'false');
+    params.append('type', String(type));
+    params.append('typeOptions', '');
+    params.append('status', '0');
+    params.append('serviceContext', JSON.stringify({ scopeGroupId: String(groupId) }));
+
+    const url = baseUrl.replace(/\/$/, '') + '/api/jsonws/fragment.fragmententry/add-fragment-entry';
+    const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+    if (user && pass) {
+        headers['Authorization'] = 'Basic ' + btoa(user + ':' + pass);
+    } else if (token) {
+        headers['x-csrf-token'] = token;
+    }
+
+    dbg('JSONWS add-fragment-entry', url, { groupId, fragmentCollectionId, name });
+
+    const res = await fetch(url, { method: 'POST', credentials: 'same-origin', headers, body: params.toString() });
+    if (!res.ok) {
+        const bodyText = await res.text().catch(() => '');
+        throw new Error(`JSONWS add-fragment-entry failed: HTTP ${res.status} ${res.statusText} — ${bodyText.substring(0, 2000)}`);
+    }
+    return res.json();
+}
+
+/**
+ * Delete a Fragment Collection via JSON-WS (POST /api/jsonws/fragment.fragmentcollection/delete-fragment-collection)
+ */
+export async function deleteFragmentCollection({ baseUrl, fragmentCollectionId, user, pass }) {
+    const token = getLiferayToken();
+    const params = new URLSearchParams();
+    if (token) params.append('p_auth', token);
+    params.append('fragmentCollectionId', String(fragmentCollectionId));
+
+    const url = baseUrl.replace(/\/$/, '') + '/api/jsonws/fragment.fragmentcollection/delete-fragment-collection';
+    const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+    if (user && pass) {
+        headers['Authorization'] = 'Basic ' + btoa(user + ':' + pass);
+    } else if (token) {
+        headers['x-csrf-token'] = token;
+    }
+
+    dbg('JSONWS delete-fragment-collection', url, { fragmentCollectionId });
+
+    const res = await fetch(url, { method: 'POST', credentials: 'same-origin', headers, body: params.toString() });
+    if (!res.ok) {
+        const bodyText = await res.text().catch(() => '');
+        throw new Error(`JSONWS delete-fragment-collection failed: HTTP ${res.status} ${res.statusText} — ${bodyText.substring(0, 2000)}`);
+    }
+    return { deleted: true, fragmentCollectionId: Number(fragmentCollectionId) };
+}
+
+/**
+ * Delete a Fragment Entry via JSON-WS (POST /api/jsonws/fragment.fragmententry/delete-fragment-entry)
+ */
+export async function deleteFragment({ baseUrl, fragmentEntryId, user, pass }) {
+    const token = getLiferayToken();
+    const params = new URLSearchParams();
+    if (token) params.append('p_auth', token);
+    params.append('fragmentEntryId', String(fragmentEntryId));
+
+    const url = baseUrl.replace(/\/$/, '') + '/api/jsonws/fragment.fragmententry/delete-fragment-entry';
+    const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+    if (user && pass) {
+        headers['Authorization'] = 'Basic ' + btoa(user + ':' + pass);
+    } else if (token) {
+        headers['x-csrf-token'] = token;
+    }
+
+    dbg('JSONWS delete-fragment-entry', url, { fragmentEntryId });
+
+    const res = await fetch(url, { method: 'POST', credentials: 'same-origin', headers, body: params.toString() });
+    if (!res.ok) {
+        const bodyText = await res.text().catch(() => '');
+        throw new Error(`JSONWS delete-fragment-entry failed: HTTP ${res.status} ${res.statusText} — ${bodyText.substring(0, 2000)}`);
+    }
+    return { deleted: true, fragmentEntryId: Number(fragmentEntryId) };
+}
+
+/**
+ * Get a single Fragment Entry by ID via JSON-WS (GET /api/jsonws/fragment.fragmententry/fetch-fragment-entry)
+ * Returns the fragment entry object with html, css, js, configuration, etc.
+ */
+export async function getFragment({ baseUrl, fragmentEntryId, user, pass }) {
+    const token = getLiferayToken();
+    const params = new URLSearchParams();
+    if (token) params.append('p_auth', token);
+    params.append('fragmentEntryId', String(fragmentEntryId));
+
+    const url = baseUrl.replace(/\/$/, '') + '/api/jsonws/fragment.fragmententry/fetch-fragment-entry?' + params.toString();
+    const headers = {};
+    if (user && pass) {
+        headers['Authorization'] = 'Basic ' + btoa(user + ':' + pass);
+    } else if (token) {
+        headers['x-csrf-token'] = token;
+    }
+
+    dbg('JSONWS fetch-fragment-entry', url, { fragmentEntryId });
+    const res = await fetch(url, { method: 'GET', credentials: 'same-origin', headers });
+    if (!res.ok) {
+        const bodyText = await res.text().catch(() => '');
+        throw new Error(`JSONWS fetch-fragment-entry failed: HTTP ${res.status} ${res.statusText} — ${bodyText.substring(0, 2000)}`);
+    }
+    return res.json();
+}
+
+/**
+ * Update a Fragment Entry via JSON-WS (POST /api/jsonws/fragment.fragmententry/update-fragment-entry)
+ * Uses the 13-parameter signature: fragmentEntryId, fragmentCollectionId, name, css, html, js,
+ * cacheable, configuration, icon, previewFileEntryId, readOnly, typeOptions, status
+ * All parameters are required by JSONWS — for fields you don't want to change, pass the current values.
+ * Returns the updated fragment entry object.
+ */
+export async function updateFragment({ baseUrl, fragmentEntryId, fragmentCollectionId, name, html, css, js, cacheable, configuration, icon, previewFileEntryId, readOnly, typeOptions, status, user, pass }) {
+    const token = getLiferayToken();
+    const params = new URLSearchParams();
+    if (token) params.append('p_auth', token);
+    // 13-parameter signature — all params required by JSONWS
+    params.append('fragmentEntryId', String(fragmentEntryId));
+    params.append('fragmentCollectionId', String(fragmentCollectionId || 0));
+    params.append('name', name !== undefined ? name : '');
+    params.append('css', css !== undefined ? css : '');
+    params.append('html', html !== undefined ? html : '');
+    params.append('js', js !== undefined ? js : '');
+    params.append('cacheable', String(cacheable || false));
+    params.append('configuration', configuration !== undefined ? configuration : '');
+    params.append('icon', icon !== undefined ? icon : '');
+    params.append('previewFileEntryId', String(previewFileEntryId || 0));
+    params.append('readOnly', String(readOnly || false));
+    params.append('typeOptions', typeOptions !== undefined ? typeOptions : '');
+    params.append('status', String(status !== undefined ? status : 0));
+
+    const url = baseUrl.replace(/\/$/, '') + '/api/jsonws/fragment.fragmententry/update-fragment-entry';
+    const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+    if (user && pass) {
+        headers['Authorization'] = 'Basic ' + btoa(user + ':' + pass);
+    } else if (token) {
+        headers['x-csrf-token'] = token;
+    }
+
+    dbg('JSONWS update-fragment-entry', url, { fragmentEntryId, name });
+
+    const res = await fetch(url, { method: 'POST', credentials: 'same-origin', headers, body: params.toString() });
+    if (!res.ok) {
+        const bodyText = await res.text().catch(() => '');
+        throw new Error(`JSONWS update-fragment-entry failed: HTTP ${res.status} ${res.statusText} — ${bodyText.substring(0, 2000)}`);
+    }
+    return res.json();
+}
+
+/**
  * List all SXP Blueprints via Search Experiences REST API.
  */
 export async function listSxpBlueprints({ baseUrl, pageSize = 20, user, pass }) {
